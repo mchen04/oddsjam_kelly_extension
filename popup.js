@@ -126,7 +126,14 @@ function injectBetSizeColumn() {
     </div>
     <div class="mt-[-3px] h-[3px] w-full bg-transparent"></div>
   `;
-  headerRow.appendChild(newHeader);
+  
+  // Insert header after the 7th column
+  const seventhHeader = headerRow.querySelector('th:nth-child(7)');
+  if (seventhHeader) {
+    seventhHeader.after(newHeader);
+  } else {
+    headerRow.appendChild(newHeader);
+  }
 
   // Add cells to each row
   const rows = table.querySelectorAll('tbody tr');
@@ -138,7 +145,13 @@ function injectBetSizeColumn() {
         <p class="text-sm text-inherit kelly-bet-size">Calculating...</p>
       </div>
     `;
-    row.appendChild(newCell);
+    // Insert after the 7th column (as 8th column)
+    const seventhCell = row.querySelector('td:nth-child(7)');
+    if (seventhCell) {
+      seventhCell.after(newCell);
+    } else {
+      row.appendChild(newCell); // Fallback if 7th column doesn't exist
+    }
   });
 }
 
