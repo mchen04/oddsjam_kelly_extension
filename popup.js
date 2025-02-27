@@ -80,7 +80,7 @@ function displayResults(results) {
 
   if (results && results[0] && results[0].result) {
       const tableData = processTableData(results[0].result.text);
-      displayTableFormat(tableData);
+      //displayTableFormat(tableData);
       
       // Inject column and update bet sizes
       chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -104,12 +104,17 @@ function injectBetSizeColumn() {
   const table = document.querySelector('table');
   if (!table) return;
 
+  // Check if column already exists by looking for the kelly_size class
+  if (document.querySelector('.kelly_size')) {
+    return;
+  }
+
   // Add header
   const headerRow = table.querySelector('thead tr');
   if (!headerRow) return;
 
   const newHeader = document.createElement('th');
-  newHeader.className = 'z-1 sticky top-0 bg-brand-gray border-none';
+  newHeader.className = 'z-1 sticky top-0 bg-brand-gray border-none kelly_size';
   newHeader.innerHTML = `
     <div class="relative flex h-12 justify-between border-t border-[#4F5253] mt-4">
       <div class="flex flex-1 justify-center">
@@ -127,7 +132,7 @@ function injectBetSizeColumn() {
   const rows = table.querySelectorAll('tbody tr');
   rows.forEach(row => {
     const newCell = document.createElement('td');
-    newCell.className = row.firstElementChild?.className || '';
+    newCell.className = `${row.firstElementChild?.className || ''} kelly_size`;
     newCell.innerHTML = `
       <div class="flex h-full flex-col justify-center px-4 py-3 min-w-[100px] text-center hover:brightness-110">
         <p class="text-sm text-inherit kelly-bet-size">Calculating...</p>
@@ -140,10 +145,11 @@ function injectBetSizeColumn() {
 function updateBetSizes(betSizes) {
   const cells = document.querySelectorAll('.kelly-bet-size');
   cells.forEach((cell, index) => {
-      if (betSizes[index] !== undefined) {
-          const percentage = (betSizes[index] * 100).toFixed(2);
-          cell.textContent = `${percentage}%`;
-      }
+    if (betSizes[index] !== undefined) {
+      // Format as currency instead of percentage
+      const dollarAmount = parseFloat(betSizes[index]).toFixed(2);
+      cell.textContent = `$${dollarAmount}`;
+    }
   });
 }
 
