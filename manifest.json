@@ -3,18 +3,36 @@
     "name": "Oddsjam Fantasy Bet Sizing Calculator",
     "version": "1.1",
     "description": "Used alongside the Oddsjam Fantasy Optimizer, calculates optimal bet size based on kelly criterion, expected value, and implied odds",
-    "permissions": ["activeTab", "scripting", "storage"],
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "tabs",
+        "storage"
+    ],
+    "host_permissions": [
+        "https://*.oddsjam.com/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": ["https://*.oddsjam.com/*"],
+            "js": ["content.js"],
+            "run_at": "document_end"
+        }
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
     "action": {
-      "default_popup": "popup.html",
-      "default_icon": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "images/icon16.png",
+            "48": "images/icon48.png",
+            "128": "images/icon128.png"
+        }
+    },
+    "icons": {
         "16": "images/icon16.png",
         "48": "images/icon48.png",
         "128": "images/icon128.png"
-      }
-    },
-    "icons": {
-      "16": "images/icon16.png",
-      "48": "images/icon48.png",
-      "128": "images/icon128.png"
     }
-  }
+}

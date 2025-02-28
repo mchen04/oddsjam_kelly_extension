@@ -2,13 +2,57 @@ document.addEventListener('DOMContentLoaded', function() {
   const scrapeButton = document.getElementById('scrapeButton');
   const resultsContainer = document.getElementById('results');
   
-  // Main scrape function
+  // Auto-run function
+  function autoRunScraper() {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      chrome.scripting.executeScript({
+        target: {tabId: tabs[0].id},
+        function: checkAndRunScraper
+      });
+    });
+  }
+
+  // Function to check if we're on the right page and run the scraper
+  function checkAndRunScraper() {
+    const table = document.querySelector('table');
+    if (!table) return;
+
+    const secondHeader = table.querySelector('thead tr th:nth-child(2)');
+    if (secondHeader && secondHeader.textContent.toLowerCase().includes('game')) {
+      // Only run if Kelly column doesn't exist yet
+      if (!document.querySelector('.kelly_size')) {
+        scrapeTargetedElements();
+      }
+    }
+  }
+
+  // Run automatically when popup opens
+  autoRunScraper();
+
+  // Keep button for manual runs
   scrapeButton.addEventListener('click', function() {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       chrome.scripting.executeScript({
         target: {tabId: tabs[0].id},
         function: scrapeTargetedElements
-      }, displayResults);
+      }, (results) => {
+        if (results && results[0] && results[0].result) {
+          const tableData = processTableData(results[0].result.text);
+          
+          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.scripting.executeScript({
+              target: {tabId: tabs[0].id},
+              function: injectBetSizeColumn
+            }, () => {
+              chrome.scripting.executeScript({
+                target: {tabId: tabs[0].id},
+                function: updateBetSizes,
+                args: [tableData.map(row => row.betSize)]
+              });
+            });
+          });
+        }
+      });
     });
   });
 
@@ -127,8 +171,8 @@ function injectBetSizeColumn() {
     <div class="mt-[-3px] h-[3px] w-full bg-transparent"></div>
   `;
   
-  // Insert header after the 7th column
-  const seventhHeader = headerRow.querySelector('th:nth-child(7)');
+  // Insert after the 7th column
+  const seventhHeader = headerRow.children[6];
   if (seventhHeader) {
     seventhHeader.after(newHeader);
   } else {
@@ -145,12 +189,13 @@ function injectBetSizeColumn() {
         <p class="text-sm text-inherit kelly-bet-size">Calculating...</p>
       </div>
     `;
-    // Insert after the 7th column (as 8th column)
-    const seventhCell = row.querySelector('td:nth-child(7)');
+    
+    // Insert after the 7th column
+    const seventhCell = row.children[6];
     if (seventhCell) {
       seventhCell.after(newCell);
     } else {
-      row.appendChild(newCell); // Fallback if 7th column doesn't exist
+      row.appendChild(newCell);
     }
   });
 }
