@@ -1,6 +1,248 @@
 document.addEventListener('DOMContentLoaded', function() {
   const scrapeButton = document.getElementById('scrapeButton');
   const resultsContainer = document.getElementById('results');
+  const bankrollInput = document.getElementById('bankroll');
+  const kellyMultiplierInput = document.getElementById('kellyMultiplier');
+  const enableToggle = document.getElementById('enableToggle');
+  
+  // Load saved values from storage
+  loadSavedValues();
+  
+  // Save values when they change
+  bankrollInput.addEventListener('change', saveValues);
+  kellyMultiplierInput.addEventListener('change', saveValues);
+  enableToggle.addEventListener('change', function() {
+    // When toggle changes, save its state and the current URL if enabled
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      // Extract base URL without query parameters
+      const url = new URL(tabs[0].url);
+      const baseUrl = url.origin + url.pathname;
+      const urlTitle = tabs[0].title || baseUrl;
+      
+      // Get existing enabled URLs
+      chrome.storage.local.get(['enabledUrls'], function(result) {
+        let enabledUrls = result.enabledUrls || [];
+        
+        if (enableToggle.checked) {
+          // Add current URL if not already in the list
+          if (!enabledUrls.some(item => item.url === baseUrl)) {
+            enabledUrls.push({
+              url: baseUrl,
+              title: urlTitle,
+              enabled: true
+            });
+          } else {
+            // Update existing URL to enabled
+            enabledUrls = enabledUrls.map(item =>
+              item.url === baseUrl ? {...item, enabled: true} : item
+            );
+          }
+        } else {
+          // Update existing URL to disabled
+          enabledUrls = enabledUrls.map(item =>
+            item.url === baseUrl ? {...item, enabled: false} : item
+          );
+        }
+        
+        // Save updated list
+        chrome.storage.local.set({
+          'enabledUrls': enabledUrls
+        }, function() {
+          // Update the displayed list
+          displayEnabledUrls();
+        });
+      });
+    });
+  });
+  
+  // Function to save values to chrome.storage
+  function saveValues() {
+    chrome.storage.local.set({
+      'bankroll': bankrollInput.value,
+      'kellyMultiplier': kellyMultiplierInput.value
+    });
+  }
+  
+  // Function to load saved values from chrome.storage
+  function loadSavedValues() {
+    chrome.storage.local.get(['bankroll', 'kellyMultiplier', 'enabledUrls'], function(result) {
+      if (result.bankroll) {
+        bankrollInput.value = result.bankroll;
+      }
+      if (result.kellyMultiplier) {
+        kellyMultiplierInput.value = result.kellyMultiplier;
+      }
+      
+      // Display the list of enabled URLs
+      displayEnabledUrls();
+      
+      // Check if we're on an enabled page
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        // Extract base URL without query parameters
+        const url = new URL(tabs[0].url);
+        const currentBaseUrl = url.origin + url.pathname;
+        
+        // Check if current URL is in the enabled list
+        const enabledUrls = result.enabledUrls || [];
+        const currentUrlInfo = enabledUrls.find(item => item.url === currentBaseUrl);
+        
+        // Set toggle state based on current URL
+        enableToggle.checked = currentUrlInfo ? currentUrlInfo.enabled : false;
+        
+        // If current URL is enabled, run the scraper and get data
+        if (currentUrlInfo && currentUrlInfo.enabled) {
+          autoRunScraper();
+          // Also run the Get Data functionality
+          runGetData();
+        }
+        
+        // Function to run the Get Data functionality
+        function runGetData() {
+          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.scripting.executeScript({
+              target: {tabId: tabs[0].id},
+              function: scrapeTargetedElements
+            }, (results) => {
+              if (results && results[0] && results[0].result) {
+                const tableData = processTableData(results[0].result.text);
+                
+                chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                  chrome.scripting.executeScript({
+                    target: {tabId: tabs[0].id},
+                    function: injectBetSizeColumn
+                  }, () => {
+                    // Add a short delay before updating bet sizes to ensure values are properly calculated
+                    setTimeout(() => {
+                      chrome.scripting.executeScript({
+                        target: {tabId: tabs[0].id},
+                        function: updateBetSizes,
+                        args: [tableData.map(row => row.betSize)]
+                      });
+                    }, 250); // 0.25 second delay
+                  });
+                });
+              }
+            });
+          });
+        }
+      });
+    });
+  }
+  
+  // Function to display the list of enabled URLs
+  function displayEnabledUrls() {
+    // Get the container for the URL list (we'll add this to the HTML)
+    const urlListContainer = document.getElementById('enabledUrlsList');
+    if (!urlListContainer) return;
+    
+    // Clear the container
+    urlListContainer.innerHTML = '';
+    
+    // Get the list of enabled URLs
+    chrome.storage.local.get(['enabledUrls'], function(result) {
+      const enabledUrls = result.enabledUrls || [];
+      
+      if (enabledUrls.length === 0) {
+        urlListContainer.innerHTML = '<p class="no-urls">No pages have been enabled yet.</p>';
+        return;
+      }
+      
+      // Create a list element
+      const list = document.createElement('ul');
+      list.className = 'url-list';
+      
+      // Add each URL to the list
+      enabledUrls.forEach((item, index) => {
+        const listItem = document.createElement('li');
+        listItem.className = 'url-item';
+        
+        // Create toggle switch container
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'url-toggle';
+        
+        // Create toggle input
+        const toggleInput = document.createElement('input');
+        toggleInput.type = 'checkbox';
+        toggleInput.id = `toggle-${index}`;
+        toggleInput.checked = item.enabled;
+        toggleInput.dataset.url = item.url;
+        toggleInput.addEventListener('change', function() {
+          toggleUrlEnabled(item.url, this.checked);
+        });
+        
+        // Create toggle label
+        const toggleLabel = document.createElement('label');
+        toggleLabel.htmlFor = `toggle-${index}`;
+        
+        // Add input and label to container
+        toggleContainer.appendChild(toggleInput);
+        toggleContainer.appendChild(toggleLabel);
+        
+        // Create URL text
+        const urlText = document.createElement('span');
+        urlText.className = 'url-text';
+        urlText.textContent = item.title || item.url;
+        
+        // Create delete button
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'delete-url';
+        deleteButton.textContent = '×';
+        deleteButton.dataset.url = item.url;
+        deleteButton.addEventListener('click', function() {
+          deleteUrl(item.url);
+        });
+        
+        // Add elements to list item
+        listItem.appendChild(toggleContainer);
+        listItem.appendChild(urlText);
+        listItem.appendChild(deleteButton);
+        
+        // Add list item to list
+        list.appendChild(listItem);
+      });
+      
+      // Add list to container
+      urlListContainer.appendChild(list);
+    });
+  }
+  
+  // Function to toggle a URL's enabled state
+  function toggleUrlEnabled(url, enabled) {
+    chrome.storage.local.get(['enabledUrls'], function(result) {
+      let enabledUrls = result.enabledUrls || [];
+      
+      // Update the URL's enabled state
+      enabledUrls = enabledUrls.map(item =>
+        item.url === url ? {...item, enabled: enabled} : item
+      );
+      
+      // Save the updated list
+      chrome.storage.local.set({
+        'enabledUrls': enabledUrls
+      }, function() {
+        // Update the displayed list
+        displayEnabledUrls();
+      });
+    });
+  }
+  
+  // Function to delete a URL from the list
+  function deleteUrl(url) {
+    chrome.storage.local.get(['enabledUrls'], function(result) {
+      let enabledUrls = result.enabledUrls || [];
+      
+      // Remove the URL from the list
+      enabledUrls = enabledUrls.filter(item => item.url !== url);
+      
+      // Save the updated list
+      chrome.storage.local.set({
+        'enabledUrls': enabledUrls
+      }, function() {
+        // Update the displayed list
+        displayEnabledUrls();
+      });
+    });
+  }
   
   // Auto-run function
   function autoRunScraper() {
@@ -26,34 +268,49 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // Run automatically when popup opens
-  autoRunScraper();
+  // No longer run here - now runs after loading saved values
 
   // Keep button for manual runs
   scrapeButton.addEventListener('click', function() {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      chrome.scripting.executeScript({
-        target: {tabId: tabs[0].id},
-        function: scrapeTargetedElements
-      }, (results) => {
-        if (results && results[0] && results[0].result) {
-          const tableData = processTableData(results[0].result.text);
+    // If toggle is enabled, save current URL to the list
+    if (enableToggle.checked) {
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        // Extract base URL without query parameters
+        const url = new URL(tabs[0].url);
+        const baseUrl = url.origin + url.pathname;
+        const urlTitle = tabs[0].title || baseUrl;
+        
+        // Get existing enabled URLs
+        chrome.storage.local.get(['enabledUrls'], function(result) {
+          let enabledUrls = result.enabledUrls || [];
           
-          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            chrome.scripting.executeScript({
-              target: {tabId: tabs[0].id},
-              function: injectBetSizeColumn
-            }, () => {
-              chrome.scripting.executeScript({
-                target: {tabId: tabs[0].id},
-                function: updateBetSizes,
-                args: [tableData.map(row => row.betSize)]
-              });
+          // Add current URL if not already in the list
+          if (!enabledUrls.some(item => item.url === baseUrl)) {
+            enabledUrls.push({
+              url: baseUrl,
+              title: urlTitle,
+              enabled: true
             });
+          } else {
+            // Update existing URL to enabled
+            enabledUrls = enabledUrls.map(item =>
+              item.url === baseUrl ? {...item, enabled: true} : item
+            );
+          }
+          
+          // Save updated list
+          chrome.storage.local.set({
+            'enabledUrls': enabledUrls
+          }, function() {
+            // Update the displayed list
+            displayEnabledUrls();
           });
-        }
+        });
       });
-    });
+    }
+    
+    // Always run when button is clicked, regardless of toggle state
+    runGetData();
   });
 
 // This function runs in the context of the web page
@@ -132,11 +389,14 @@ function displayResults(results) {
               target: {tabId: tabs[0].id},
               function: injectBetSizeColumn
           }, () => {
-              chrome.scripting.executeScript({
-                  target: {tabId: tabs[0].id},
-                  function: updateBetSizes,
-                  args: [tableData.map(row => row.betSize)]
-              });
+              // Add a short delay before updating bet sizes to ensure values are properly calculated
+              setTimeout(() => {
+                  chrome.scripting.executeScript({
+                      target: {tabId: tabs[0].id},
+                      function: updateBetSizes,
+                      args: [tableData.map(row => row.betSize)]
+                  });
+              }, 250); // 0.25 second delay
           });
       });
   } else {
@@ -214,7 +474,7 @@ function updateBetSizes(betSizes) {
 function processTableData(rawText) {
   const lines = rawText.trim().split('\n\n');
   const tableData = [];
-  const bankroll = parseFloat(document.getElementById('bankroll').value) || 5000;
+  const bankroll = parseFloat(document.getElementById('bankroll').value) || 4000;
   const kellyMultiplier = parseFloat(document.getElementById('kellyMultiplier').value) || 0.25;
   
   for (let i = 0; i < lines.length; i += 3) {

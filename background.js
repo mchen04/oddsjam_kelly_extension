@@ -1,15 +1,65 @@
-// Listen for tab updates to automatically run the scraper when navigating to Oddsjam
+// Listen for tab updates to automatically run the scraper when navigating to enabled pages
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && tab.url && tab.url.includes('oddsjam.com')) {
+    if (changeInfo.status === 'complete' && tab.url) {
       // Wait a bit for the page to fully render before checking
       setTimeout(() => {
-        runScraper(tabId);
-      }, 1500); // 1.5 second delay
+        // Check if this page is in the list of enabled URLs
+        checkIfPageEnabled(tab.url, tabId);
+      }, 250); // 0.25 second delay
     }
   });
+
+// Also listen for DOM content loaded to catch pages that might load tables dynamically
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'loading' && tab.url) {
+      // We'll set up a delayed check to run after the page has had time to load dynamic content
+      setTimeout(() => {
+        checkIfPageEnabled(tab.url, tabId);
+      }, 1000); // 1 second delay for dynamic content
+    }
+  });
+
+// Check if the current page is in the list of enabled URLs
+function checkIfPageEnabled(url, tabId) {
+  try {
+    // Extract base URL without query parameters
+    const urlObj = new URL(url);
+    const baseUrl = urlObj.origin + urlObj.pathname;
+    
+    console.log("Checking if page is enabled:", baseUrl);
+    
+    // Get the list of enabled URLs
+    chrome.storage.local.get(['enabledUrls'], function(result) {
+      const enabledUrls = result.enabledUrls || [];
+      
+      // Check if current URL is in the enabled list and is enabled
+      const currentUrlInfo = enabledUrls.find(item => item.url === baseUrl);
+      
+      if (currentUrlInfo && currentUrlInfo.enabled) {
+        console.log("Page is enabled, running scraper automatically");
+        runScraper(tabId);
+        
+        // Also notify the content script to run its calculations
+        chrome.tabs.sendMessage(tabId, {
+          action: "pageEnabled",
+          bankroll: result.bankroll || 3000,
+          kellyMultiplier: result.kellyMultiplier || 1
+        }, function(response) {
+          console.log("Content script response:", response);
+        });
+      } else {
+        console.log("Page is not enabled for automatic calculations");
+      }
+    });
+  } catch (error) {
+    console.error("Error checking if page is enabled:", error);
+  }
+}
   
   // Main function to orchestrate the scraping process
   function runScraper(tabId) {
+    console.log("Running scraper on tab:", tabId);
+    
     // First, check if there's a table that needs our processing
     chrome.scripting.executeScript({
       target: {tabId: tabId},
@@ -28,13 +78,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             console.log(`Scraped ${scraped.elements} elements`);
             
             // Step 2: Process the data with settings from storage
-            chrome.storage.sync.get({
-              bankroll: 5000, 
-              kellyMultiplier: 0.25
+            chrome.storage.local.get({
+              bankroll: 4000,
+              kellyMultiplier: 1
             }, (settings) => {
               const tableData = processTableData(
-                scraped.text, 
-                settings.bankroll, 
+                scraped.text,
+                settings.bankroll,
                 settings.kellyMultiplier
               );
               
@@ -43,33 +93,54 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 target: {tabId: tabId},
                 function: injectBetSizeColumn
               }, () => {
-                // Step 4: Update the bet sizes
-                chrome.scripting.executeScript({
-                  target: {tabId: tabId},
-                  function: updateBetSizes,
-                  args: [tableData.map(row => row.betSize)]
-                });
+                // Add a short delay before updating bet sizes to ensure values are properly calculated
+                setTimeout(() => {
+                  // Step 4: Update the bet sizes
+                  chrome.scripting.executeScript({
+                    target: {tabId: tabId},
+                    function: updateBetSizes,
+                    args: [tableData.map(row => row.betSize)]
+                  });
+                }, 250); // 0.25 second delay
               });
             });
+          } else {
+            console.log("No elements scraped, trying again in 1 second");
+            // Try again after a delay in case content is still loading
+            setTimeout(() => runScraper(tabId), 1000);
           }
         });
       } else {
-        console.log("No suitable table found on this page");
+        console.log("No suitable table found on this page, trying again in 1 second");
+        // Try again after a delay in case table is loaded dynamically
+        setTimeout(() => runScraper(tabId), 1000);
       }
     });
   }
   
   // Check if there's a table that needs our processing
   function checkForTargetTable() {
+    console.log("Checking for target table");
     const table = document.querySelector('table');
-    if (!table) return false;
-  
-    const secondHeader = table.querySelector('thead tr th:nth-child(2)');
-    if (secondHeader && secondHeader.textContent.toLowerCase().includes('game')) {
-      if (!document.querySelector('.kelly_size')) {
-        return true;
-      }
+    if (!table) {
+      console.log("No table found");
+      return false;
     }
+  
+    // Check if Kelly column already exists
+    if (document.querySelector('.kelly_size')) {
+      console.log("Kelly column already exists");
+      return false;
+    }
+    
+    // More flexible check for table structure
+    const headers = table.querySelectorAll('thead tr th');
+    if (headers.length > 0) {
+      console.log("Table with headers found");
+      return true;
+    }
+    
+    console.log("Table found but doesn't match criteria");
     return false;
   }
   
@@ -215,23 +286,41 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     return true;
   }
   
-  // Listen for messages from the popup
+  // Listen for messages from the popup or content script
   chrome.runtime.onMessage.addListener(
     function(request, sender, sendResponse) {
+      console.log("Message received:", request, "from:", sender);
+      
       if (request.action === "runScraper") {
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-          runScraper(tabs[0].id);
-          sendResponse({status: "Scraper started"});
-        });
+        // If the message comes from a content script, use the sender's tab ID
+        const tabId = sender.tab ? sender.tab.id : null;
+        
+        if (tabId) {
+          console.log("Running scraper on tab:", tabId);
+          runScraper(tabId);
+          sendResponse({status: "Scraper started on tab " + tabId});
+        } else {
+          // If no tab ID from sender, use the active tab
+          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            if (tabs && tabs[0]) {
+              console.log("Running scraper on active tab:", tabs[0].id);
+              runScraper(tabs[0].id);
+              sendResponse({status: "Scraper started on active tab " + tabs[0].id});
+            } else {
+              console.error("No active tab found");
+              sendResponse({status: "Error: No active tab found"});
+            }
+          });
+        }
         return true; // Keep the message channel open for the async response
-      } 
+      }
       else if (request.action === "updateSettings") {
         // Store settings when updated from popup
-        chrome.storage.sync.set({
+        chrome.storage.local.set({
           bankroll: request.bankroll,
           kellyMultiplier: request.kellyMultiplier
         }, function() {
-          console.log("Settings saved");
+          console.log("Settings saved:", request.bankroll, request.kellyMultiplier);
           sendResponse({status: "Settings saved"});
         });
         return true; // Keep the message channel open for the async response
