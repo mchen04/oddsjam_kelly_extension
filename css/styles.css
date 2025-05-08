@@ -332,16 +332,12 @@ button:hover {
 /* Preset Settings Styles */
 .preset-actions {
   display: flex;
-  gap: 10px;
+  justify-content: center;
   margin-top: 12px;
 }
 
-.preset-actions input {
-  flex: 1;
-}
-
 .preset-actions button {
-  width: auto;
+  width: 100%;
   white-space: nowrap;
 }
 

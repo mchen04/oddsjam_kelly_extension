@@ -67,10 +67,10 @@ function checkIfPageEnabled(url, tabId) {
             if (!hasMinOdds || !hasMaxOdds || !hasMinNumDataPoints) {
               console.log("Modifying URL with preset parameters");
               
-              // Set the preset parameters
-              tabUrl.searchParams.set('minOdds', currentPreset.minOdds);
-              tabUrl.searchParams.set('maxOdds', currentPreset.maxOdds);
-              tabUrl.searchParams.set('minNumDataPoints', currentPreset.minNumDataPoints);
+              // Set the preset parameters (use preset values or defaults)
+              tabUrl.searchParams.set('minOdds', currentPreset.minOdds || "-200");
+              tabUrl.searchParams.set('maxOdds', currentPreset.maxOdds || "200");
+              tabUrl.searchParams.set('minNumDataPoints', currentPreset.minNumDataPoints || "3");
               
               // Update the tab URL
               chrome.tabs.update(tabId, {url: tabUrl.toString()}, function() {

@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const minOddsInput = document.getElementById('minOdds');
   const maxOddsInput = document.getElementById('maxOdds');
   const minNumDataPointsInput = document.getElementById('minNumDataPoints');
-  const presetNameInput = document.getElementById('presetName');
   const savePresetButton = document.getElementById('savePresetButton');
   
   // Load saved values from storage
@@ -137,6 +136,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Set preset toggle state based on current URL
         presetToggle.checked = currentPreset ? currentPreset.enabled : false;
+        
+        // Update input fields with preset values if available
+        if (currentPreset && currentPreset.enabled) {
+          minOddsInput.value = currentPreset.minOdds || "-200";
+          maxOddsInput.value = currentPreset.maxOdds || "200";
+          minNumDataPointsInput.value = currentPreset.minNumDataPoints || "3";
+        }
         
         // If current URL is enabled, run the scraper and get data
         if (currentUrlInfo && currentUrlInfo.enabled) {
@@ -313,9 +319,9 @@ document.addEventListener('DOMContentLoaded', function() {
               url: baseUrl,
               title: urlTitle,
               enabled: true,
-              minOdds: minOddsInput.value,
-              maxOdds: maxOddsInput.value,
-              minNumDataPoints: minNumDataPointsInput.value,
+              minOdds: "-200",
+              maxOdds: "200",
+              minNumDataPoints: "3",
               name: urlTitle.split(' - ')[0] || 'Preset'
             });
           } else {
@@ -323,10 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
             savedPresets = savedPresets.map(item =>
               item.url === baseUrl ? {
                 ...item,
-                enabled: true,
-                minOdds: minOddsInput.value,
-                maxOdds: maxOddsInput.value,
-                minNumDataPoints: minNumDataPointsInput.value
+                enabled: true
               } : item
             );
           }
@@ -354,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const url = new URL(tabs[0].url);
       const baseUrl = url.origin + url.pathname;
       const urlTitle = tabs[0].title || baseUrl;
-      const presetName = presetNameInput.value.trim() || urlTitle.split(' - ')[0] || 'Preset';
+      const presetName = urlTitle.split(' - ')[0] || 'Preset';
       
       // Get existing saved presets
       chrome.storage.local.get(['savedPresets'], function(result) {
@@ -366,9 +369,9 @@ document.addEventListener('DOMContentLoaded', function() {
             url: baseUrl,
             title: urlTitle,
             enabled: true,
-            minOdds: minOddsInput.value,
-            maxOdds: maxOddsInput.value,
-            minNumDataPoints: minNumDataPointsInput.value,
+            minOdds: "-200",
+            maxOdds: "200",
+            minNumDataPoints: "3",
             name: presetName
           });
         } else {
@@ -377,9 +380,9 @@ document.addEventListener('DOMContentLoaded', function() {
             item.url === baseUrl ? {
               ...item,
               enabled: true,
-              minOdds: minOddsInput.value,
-              maxOdds: maxOddsInput.value,
-              minNumDataPoints: minNumDataPointsInput.value,
+              minOdds: "-200",
+              maxOdds: "200",
+              minNumDataPoints: "3",
               name: presetName
             } : item
           );
@@ -392,9 +395,6 @@ document.addEventListener('DOMContentLoaded', function() {
         chrome.storage.local.set({
           'savedPresets': savedPresets
         }, function() {
-          // Clear preset name input
-          presetNameInput.value = '';
-          
           // Update the displayed list
           displaySavedPresets();
         });
@@ -421,16 +421,16 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Create a list element
       const list = document.createElement('ul');
-      list.className = 'preset-list';
+      list.className = 'url-list';
       
       // Add each preset to the list
       savedPresets.forEach((item, index) => {
         const listItem = document.createElement('li');
-        listItem.className = 'preset-item';
+        listItem.className = 'url-item';
         
         // Create toggle switch container
         const toggleContainer = document.createElement('div');
-        toggleContainer.className = 'preset-toggle';
+        toggleContainer.className = 'url-toggle';
         
         // Create toggle input
         const toggleInput = document.createElement('input');
@@ -450,19 +450,14 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleContainer.appendChild(toggleInput);
         toggleContainer.appendChild(toggleLabel);
         
-        // Create preset text
-        const presetText = document.createElement('span');
-        presetText.className = 'preset-text';
-        presetText.textContent = item.name || item.title || item.url;
-        
-        // Create preset info
-        const presetInfo = document.createElement('span');
-        presetInfo.className = 'preset-info';
-        presetInfo.textContent = `Min: ${item.minOdds}, Max: ${item.maxOdds}, DataPts: ${item.minNumDataPoints}`;
+        // Create URL text
+        const urlText = document.createElement('span');
+        urlText.className = 'url-text';
+        urlText.textContent = item.title || item.url;
         
         // Create delete button
         const deleteButton = document.createElement('button');
-        deleteButton.className = 'delete-preset';
+        deleteButton.className = 'delete-url';
         deleteButton.textContent = '×';
         deleteButton.dataset.url = item.url;
         deleteButton.addEventListener('click', function() {
@@ -471,8 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add elements to list item
         listItem.appendChild(toggleContainer);
-        listItem.appendChild(presetText);
-        listItem.appendChild(presetInfo);
+        listItem.appendChild(urlText);
         listItem.appendChild(deleteButton);
         
         // Add list item to list
