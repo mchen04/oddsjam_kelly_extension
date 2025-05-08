@@ -142,15 +142,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (result.kellyMultiplier) {
         kellyMultiplierInput.value = result.kellyMultiplier;
       }
-      if (result.minOdds) {
-        minOddsInput.value = result.minOdds;
-      }
-      if (result.maxOdds) {
-        maxOddsInput.value = result.maxOdds;
-      }
-      if (result.minNumDataPoints) {
-        minNumDataPointsInput.value = result.minNumDataPoints;
-      }
+      // Set default values for preset settings inputs if not already set
+      // We don't use result.minOdds etc. here because we want to use the default values from the HTML
+      // The HTML default values will be used unless there's a preset for the current page
       
       // Display the list of enabled URLs
       displayEnabledUrls();
@@ -180,9 +174,18 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update input fields with preset values if available
         if (currentPreset && currentPreset.enabled) {
-          minOddsInput.value = currentPreset.minOdds || "-200";
-          maxOddsInput.value = currentPreset.maxOdds || "200";
-          minNumDataPointsInput.value = currentPreset.minNumDataPoints || "3";
+          // Only update input values if they exist in the preset
+          if (currentPreset.minOdds !== undefined) {
+            minOddsInput.value = currentPreset.minOdds;
+          }
+          
+          if (currentPreset.maxOdds !== undefined) {
+            maxOddsInput.value = currentPreset.maxOdds;
+          }
+          
+          if (currentPreset.minNumDataPoints !== undefined) {
+            minNumDataPointsInput.value = currentPreset.minNumDataPoints;
+          }
         }
         
         // If current URL is enabled, run the scraper and get data
@@ -354,29 +357,40 @@ document.addEventListener('DOMContentLoaded', function() {
       const url = new URL(tabs[0].url);
       const baseUrl = url.origin + url.pathname;
       const urlTitle = tabs[0].title || baseUrl;
+      const presetName = urlTitle.split(' - ')[0] || 'Preset';
+      
+      // Get the current input values
+      const minOddsValue = minOddsInput.value.trim();
+      const maxOddsValue = maxOddsInput.value.trim();
+      const minNumDataPointsValue = minNumDataPointsInput.value.trim();
       
       // Get existing saved presets
       chrome.storage.local.get(['savedPresets'], function(result) {
         let savedPresets = result.savedPresets || [];
         
         if (presetToggle.checked) {
+          // Create preset object with only non-empty values
+          const presetData = {
+            url: baseUrl,
+            title: urlTitle,
+            enabled: true,
+            name: presetName
+          };
+          
+          // Only include parameters that have values
+          if (minOddsValue !== '') presetData.minOdds = minOddsValue;
+          if (maxOddsValue !== '') presetData.maxOdds = maxOddsValue;
+          if (minNumDataPointsValue !== '') presetData.minNumDataPoints = minNumDataPointsValue;
+          
           // Add current URL if not already in the list
           if (!savedPresets.some(item => item.url === baseUrl)) {
-            savedPresets.push({
-              url: baseUrl,
-              title: urlTitle,
-              enabled: true,
-              minOdds: "-200",
-              maxOdds: "200",
-              minNumDataPoints: "3",
-              name: urlTitle.split(' - ')[0] || 'Preset'
-            });
+            savedPresets.push(presetData);
           } else {
-            // Update existing URL to enabled
+            // Update existing URL to enabled and update settings
             savedPresets = savedPresets.map(item =>
               item.url === baseUrl ? {
                 ...item,
-                enabled: true
+                ...presetData
               } : item
             );
           }
@@ -406,31 +420,38 @@ document.addEventListener('DOMContentLoaded', function() {
       const urlTitle = tabs[0].title || baseUrl;
       const presetName = urlTitle.split(' - ')[0] || 'Preset';
       
+      // Get the current input values
+      const minOddsValue = minOddsInput.value.trim();
+      const maxOddsValue = maxOddsInput.value.trim();
+      const minNumDataPointsValue = minNumDataPointsInput.value.trim();
+      
       // Get existing saved presets
       chrome.storage.local.get(['savedPresets'], function(result) {
         let savedPresets = result.savedPresets || [];
         
+        // Create preset object with only non-empty values
+        const presetData = {
+          url: baseUrl,
+          title: urlTitle,
+          enabled: true,
+          name: presetName
+        };
+        
+        // Only include parameters that have values
+        if (minOddsValue !== '') presetData.minOdds = minOddsValue;
+        if (maxOddsValue !== '') presetData.maxOdds = maxOddsValue;
+        if (minNumDataPointsValue !== '') presetData.minNumDataPoints = minNumDataPointsValue;
+        
         // Add or update preset
         if (!savedPresets.some(item => item.url === baseUrl)) {
-          savedPresets.push({
-            url: baseUrl,
-            title: urlTitle,
-            enabled: true,
-            minOdds: "-200",
-            maxOdds: "200",
-            minNumDataPoints: "3",
-            name: presetName
-          });
+          // Add new preset
+          savedPresets.push(presetData);
         } else {
           // Update existing preset
           savedPresets = savedPresets.map(item =>
             item.url === baseUrl ? {
               ...item,
-              enabled: true,
-              minOdds: "-200",
-              maxOdds: "200",
-              minNumDataPoints: "3",
-              name: presetName
+              ...presetData
             } : item
           );
         }
@@ -512,15 +533,28 @@ document.addEventListener('DOMContentLoaded', function() {
           const valuesContainer = document.createElement('div');
           valuesContainer.className = 'url-values';
           
-          const minOddsValue = item.minOdds || "-200";
-          const maxOddsValue = item.maxOdds || "200";
-          const minDataPointsValue = item.minNumDataPoints || "3";
+          // Create an array to hold the value items
+          const valueItems = [];
           
-          valuesContainer.innerHTML = `
-            <span class="value-item">Min Odds: ${minOddsValue}</span>
-            <span class="value-item">Max Odds: ${maxOddsValue}</span>
-            <span class="value-item">Min Data Points: ${minDataPointsValue}</span>
-          `;
+          // Only add values that exist in the preset
+          if (item.minOdds !== undefined) {
+            valueItems.push(`<span class="value-item">Min Odds: ${item.minOdds}</span>`);
+          }
+          
+          if (item.maxOdds !== undefined) {
+            valueItems.push(`<span class="value-item">Max Odds: ${item.maxOdds}</span>`);
+          }
+          
+          if (item.minNumDataPoints !== undefined) {
+            valueItems.push(`<span class="value-item">Min Data Points: ${item.minNumDataPoints}</span>`);
+          }
+          
+          // If no values exist, show a message
+          if (valueItems.length === 0) {
+            valueItems.push(`<span class="value-item">No parameters set</span>`);
+          }
+          
+          valuesContainer.innerHTML = valueItems.join('');
           
           textContainer.appendChild(valuesContainer);
         }

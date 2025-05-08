@@ -67,19 +67,36 @@ function checkIfPageEnabled(url, tabId) {
             if (!hasMinOdds || !hasMaxOdds || !hasMinNumDataPoints) {
               console.log("Modifying URL with preset parameters");
               
-              // Set the preset parameters (use preset values or defaults)
-              tabUrl.searchParams.set('minOdds', currentPreset.minOdds || "-200");
-              tabUrl.searchParams.set('maxOdds', currentPreset.maxOdds || "200");
-              tabUrl.searchParams.set('minNumDataPoints', currentPreset.minNumDataPoints || "3");
+              // Only set parameters that exist in the preset
+              let urlModified = false;
               
-              // Update the tab URL
-              chrome.tabs.update(tabId, {url: tabUrl.toString()}, function() {
-                if (chrome.runtime.lastError) {
-                  console.error("Error updating tab URL:", chrome.runtime.lastError);
-                } else {
-                  console.log("Tab URL updated successfully");
-                }
-              });
+              if (currentPreset.minOdds !== undefined && !hasMinOdds) {
+                tabUrl.searchParams.set('minOdds', currentPreset.minOdds);
+                urlModified = true;
+              }
+              
+              if (currentPreset.maxOdds !== undefined && !hasMaxOdds) {
+                tabUrl.searchParams.set('maxOdds', currentPreset.maxOdds);
+                urlModified = true;
+              }
+              
+              if (currentPreset.minNumDataPoints !== undefined && !hasMinNumDataPoints) {
+                tabUrl.searchParams.set('minNumDataPoints', currentPreset.minNumDataPoints);
+                urlModified = true;
+              }
+              
+              // Only update the tab URL if we actually modified it
+              if (urlModified) {
+                chrome.tabs.update(tabId, {url: tabUrl.toString()}, function() {
+                  if (chrome.runtime.lastError) {
+                    console.error("Error updating tab URL:", chrome.runtime.lastError);
+                  } else {
+                    console.log("Tab URL updated successfully");
+                  }
+                });
+              } else {
+                console.log("No parameters to set, URL not modified");
+              }
             } else {
               console.log("URL already contains preset parameters");
             }
