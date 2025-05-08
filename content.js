@@ -118,11 +118,16 @@ function scrapeAndDisplayBets(bankroll, kellyMultiplier) {
     console.log('Scraping started with bankroll:', bankroll, 'and multiplier:', kellyMultiplier); // Debug log
     try {
         // Try multiple selectors to find the odds elements
+        // Include more flexible selectors to handle potential class changes
         const selectors = [
             ".text-sm.text-inherit.__className_321157",
+            ".text-sm.text-inherit", // More generic version without specific class
             "td:nth-child(6)", // Try direct table cell selector
+            "td:nth-child(6) p", // Try with paragraph inside cell
+            "td:nth-child(7) p", // Try 7th column as fallback
             "[data-testid='odds-cell']", // Try data attribute
-            ".odds-cell" // Try class
+            ".odds-cell", // Try class
+            "tbody tr td:nth-of-type(6)" // Another way to target 6th column
         ];
         
         let elements = [];
@@ -144,7 +149,9 @@ function scrapeAndDisplayBets(bankroll, kellyMultiplier) {
             // Look for cells that might contain odds (numbers with + or -)
             elements = Array.from(allCells).filter(cell => {
                 const text = cell.textContent.trim();
-                return /^[+-]?\d+$/.test(text); // Simple regex for odds format
+                // More comprehensive regex to capture various odds formats
+                return /^[+-]?\d+(\.\d+)?$/.test(text) || // +123, -123, or decimal formats
+                       /^(\+|\-)?\d+\/\d+$/.test(text);   // Fractional odds like 5/1
             });
             
             console.log(`After filtering, found ${elements.length} potential odds elements`);

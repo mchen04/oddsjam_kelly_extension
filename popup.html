@@ -8,31 +8,81 @@
 <body>
   <div class="popup-container">
     <header>
-      <h2>Kelly Bet Calculator</h2>
+      <h2>OddsJam Kelly Calculator</h2>
       <div class="toggle-container">
         <input type="checkbox" id="enableToggle">
         <label for="enableToggle">Auto-calculate</label>
       </div>
     </header>
     
-    <div class="settings-panel">
-      <div class="input-row">
-        <div class="input-group">
-          <label for="bankroll">Bankroll ($)</label>
-          <input type="number" id="bankroll" value="4000" min="0">
+    <div class="columns-container">
+      <!-- Left Column: Kelly Criterion -->
+      <div class="column kelly-column">
+        <div class="column-header">
+          <h3>Kelly Criterion</h3>
         </div>
-        <div class="input-group">
-          <label for="kellyMultiplier">Kelly %</label>
-          <input type="number" id="kellyMultiplier" value="1" min="0" max="1" step="0.01">
+        
+        <div class="settings-panel">
+          <div class="input-row">
+            <div class="input-group">
+              <label for="bankroll">Bankroll ($)</label>
+              <input type="number" id="bankroll" value="4000" min="0">
+            </div>
+            <div class="input-group">
+              <label for="kellyMultiplier">Kelly %</label>
+              <input type="number" id="kellyMultiplier" value="1" min="0" max="1" step="0.01">
+            </div>
+          </div>
+          
+          <button id="scrapeButton">Calculate Bets</button>
+        </div>
+        
+        <div class="enabled-urls-section">
+          <h3>Enabled Pages</h3>
+          <div id="enabledUrlsList"></div>
         </div>
       </div>
       
-      <button id="scrapeButton">Calculate Bets</button>
-    </div>
-    
-    <div class="enabled-urls-section">
-      <h3>Enabled Pages</h3>
-      <div id="enabledUrlsList"></div>
+      <!-- Right Column: Preset Settings -->
+      <div class="column preset-column">
+        <div class="column-header">
+          <h3>Preset Settings</h3>
+          <div class="toggle-container preset-toggle">
+            <input type="checkbox" id="presetToggle">
+            <label for="presetToggle">Enable Presets</label>
+          </div>
+        </div>
+        
+        <div class="settings-panel">
+          <div class="input-row">
+            <div class="input-group">
+              <label for="minOdds">Min Odds</label>
+              <input type="number" id="minOdds" value="1.5" min="1" step="0.1">
+            </div>
+            <div class="input-group">
+              <label for="maxOdds">Max Odds</label>
+              <input type="number" id="maxOdds" value="10" min="1" step="0.1">
+            </div>
+          </div>
+          
+          <div class="input-row">
+            <div class="input-group">
+              <label for="minNumDataPoints">Min Data Points</label>
+              <input type="number" id="minNumDataPoints" value="10" min="1">
+            </div>
+          </div>
+          
+          <div class="preset-actions">
+            <input type="text" id="presetName" placeholder="Preset Name">
+            <button id="savePresetButton">Save Preset</button>
+          </div>
+        </div>
+        
+        <div class="saved-presets-section">
+          <h3>Saved Presets</h3>
+          <div id="savedPresetsList" class="presets-list"></div>
+        </div>
+      </div>
     </div>
     
     <!-- Don't Delete, this is what makes the changes to the page -->

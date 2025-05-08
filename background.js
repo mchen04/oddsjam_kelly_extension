@@ -28,15 +28,70 @@ function checkIfPageEnabled(url, tabId) {
     
     console.log("Checking if page is enabled:", baseUrl);
     
-    // Get the list of enabled URLs
-    chrome.storage.local.get(['enabledUrls'], function(result) {
+    // Get the list of enabled URLs and preset settings
+    chrome.storage.local.get(['enabledUrls', 'savedPresets'], function(result) {
       const enabledUrls = result.enabledUrls || [];
+      const savedPresets = result.savedPresets || [];
       
       // Check if current URL is in the enabled list and is enabled
       const currentUrlInfo = enabledUrls.find(item => item.url === baseUrl);
       
-      if (currentUrlInfo && currentUrlInfo.enabled) {
-        console.log("Page is enabled, running scraper automatically");
+      // Check if current URL has preset settings enabled
+      const currentPreset = savedPresets.find(preset => preset.url === baseUrl && preset.enabled);
+      
+      // Variable to track if we need to modify the URL
+      let needsUrlModification = false;
+      
+      // If preset settings are enabled for this URL, modify it to include the parameters
+      if (currentPreset) {
+        console.log("URL has preset settings enabled:", currentPreset);
+        needsUrlModification = true;
+        
+        // Get the current tab
+        chrome.tabs.get(tabId, function(tab) {
+          if (chrome.runtime.lastError) {
+            console.error("Error getting tab:", chrome.runtime.lastError);
+            return;
+          }
+          
+          try {
+            // Create a new URL object to manipulate
+            const tabUrl = new URL(tab.url);
+            
+            // Check if this URL already contains our preset parameters
+            const hasMinOdds = tabUrl.searchParams.has('minOdds');
+            const hasMaxOdds = tabUrl.searchParams.has('maxOdds');
+            const hasMinNumDataPoints = tabUrl.searchParams.has('minNumDataPoints');
+            
+            // Only modify URL if it doesn't already have our parameters
+            if (!hasMinOdds || !hasMaxOdds || !hasMinNumDataPoints) {
+              console.log("Modifying URL with preset parameters");
+              
+              // Set the preset parameters
+              tabUrl.searchParams.set('minOdds', currentPreset.minOdds);
+              tabUrl.searchParams.set('maxOdds', currentPreset.maxOdds);
+              tabUrl.searchParams.set('minNumDataPoints', currentPreset.minNumDataPoints);
+              
+              // Update the tab URL
+              chrome.tabs.update(tabId, {url: tabUrl.toString()}, function() {
+                if (chrome.runtime.lastError) {
+                  console.error("Error updating tab URL:", chrome.runtime.lastError);
+                } else {
+                  console.log("Tab URL updated successfully");
+                }
+              });
+            } else {
+              console.log("URL already contains preset parameters");
+            }
+          } catch (err) {
+            console.error("Error modifying URL:", err);
+          }
+        });
+      }
+      
+      // Check for Kelly Criterion processing (only if not already handling preset settings)
+      if (currentUrlInfo && currentUrlInfo.enabled && !needsUrlModification) {
+        console.log("Page is enabled for Kelly calculations, running scraper automatically");
         runScraper(tabId);
         
         // Also notify the content script to run its calculations
@@ -47,7 +102,7 @@ function checkIfPageEnabled(url, tabId) {
         }, function(response) {
           console.log("Content script response:", response);
         });
-      } else {
+      } else if (!needsUrlModification) {
         console.log("Page is not enabled for automatic calculations");
       }
     });
@@ -322,6 +377,18 @@ function checkIfPageEnabled(url, tabId) {
         }, function() {
           console.log("Settings saved:", request.bankroll, request.kellyMultiplier);
           sendResponse({status: "Settings saved"});
+        });
+        return true; // Keep the message channel open for the async response
+      }
+      else if (request.action === "updatePresetSettings") {
+        // Store preset settings when updated from popup
+        chrome.storage.local.set({
+          minOdds: request.minOdds,
+          maxOdds: request.maxOdds,
+          minNumDataPoints: request.minNumDataPoints
+        }, function() {
+          console.log("Preset settings saved:", request.minOdds, request.maxOdds, request.minNumDataPoints);
+          sendResponse({status: "Preset settings saved"});
         });
         return true; // Keep the message channel open for the async response
       }

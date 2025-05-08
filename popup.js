@@ -5,12 +5,25 @@ document.addEventListener('DOMContentLoaded', function() {
   const kellyMultiplierInput = document.getElementById('kellyMultiplier');
   const enableToggle = document.getElementById('enableToggle');
   
+  // Preset Settings elements
+  const presetToggle = document.getElementById('presetToggle');
+  const minOddsInput = document.getElementById('minOdds');
+  const maxOddsInput = document.getElementById('maxOdds');
+  const minNumDataPointsInput = document.getElementById('minNumDataPoints');
+  const presetNameInput = document.getElementById('presetName');
+  const savePresetButton = document.getElementById('savePresetButton');
+  
   // Load saved values from storage
   loadSavedValues();
   
   // Save values when they change
   bankrollInput.addEventListener('change', saveValues);
   kellyMultiplierInput.addEventListener('change', saveValues);
+  
+  // Add event listeners for preset settings
+  minOddsInput.addEventListener('change', savePresetValues);
+  maxOddsInput.addEventListener('change', savePresetValues);
+  minNumDataPointsInput.addEventListener('change', savePresetValues);
   enableToggle.addEventListener('change', function() {
     // When toggle changes, save its state and the current URL if enabled
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -63,18 +76,47 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  // Function to save preset values to chrome.storage
+  function savePresetValues() {
+    chrome.storage.local.set({
+      'minOdds': minOddsInput.value,
+      'maxOdds': maxOddsInput.value,
+      'minNumDataPoints': minNumDataPointsInput.value
+    });
+  }
+  
   // Function to load saved values from chrome.storage
   function loadSavedValues() {
-    chrome.storage.local.get(['bankroll', 'kellyMultiplier', 'enabledUrls'], function(result) {
+    chrome.storage.local.get([
+      'bankroll',
+      'kellyMultiplier',
+      'enabledUrls',
+      'minOdds',
+      'maxOdds',
+      'minNumDataPoints',
+      'savedPresets'
+    ], function(result) {
       if (result.bankroll) {
         bankrollInput.value = result.bankroll;
       }
       if (result.kellyMultiplier) {
         kellyMultiplierInput.value = result.kellyMultiplier;
       }
+      if (result.minOdds) {
+        minOddsInput.value = result.minOdds;
+      }
+      if (result.maxOdds) {
+        maxOddsInput.value = result.maxOdds;
+      }
+      if (result.minNumDataPoints) {
+        minNumDataPointsInput.value = result.minNumDataPoints;
+      }
       
       // Display the list of enabled URLs
       displayEnabledUrls();
+      
+      // Display the list of saved presets
+      displaySavedPresets();
       
       // Check if we're on an enabled page
       chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -88,6 +130,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Set toggle state based on current URL
         enableToggle.checked = currentUrlInfo ? currentUrlInfo.enabled : false;
+        
+        // Check if current URL has preset settings
+        const savedPresets = result.savedPresets || [];
+        const currentPreset = savedPresets.find(preset => preset.url === currentBaseUrl);
+        
+        // Set preset toggle state based on current URL
+        presetToggle.checked = currentPreset ? currentPreset.enabled : false;
         
         // If current URL is enabled, run the scraper and get data
         if (currentUrlInfo && currentUrlInfo.enabled) {
@@ -240,6 +289,235 @@ document.addEventListener('DOMContentLoaded', function() {
       }, function() {
         // Update the displayed list
         displayEnabledUrls();
+      });
+    });
+  }
+  
+  // Preset Settings functionality
+  
+  // Handle preset toggle changes
+  presetToggle.addEventListener('change', function() {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const url = new URL(tabs[0].url);
+      const baseUrl = url.origin + url.pathname;
+      const urlTitle = tabs[0].title || baseUrl;
+      
+      // Get existing saved presets
+      chrome.storage.local.get(['savedPresets'], function(result) {
+        let savedPresets = result.savedPresets || [];
+        
+        if (presetToggle.checked) {
+          // Add current URL if not already in the list
+          if (!savedPresets.some(item => item.url === baseUrl)) {
+            savedPresets.push({
+              url: baseUrl,
+              title: urlTitle,
+              enabled: true,
+              minOdds: minOddsInput.value,
+              maxOdds: maxOddsInput.value,
+              minNumDataPoints: minNumDataPointsInput.value,
+              name: urlTitle.split(' - ')[0] || 'Preset'
+            });
+          } else {
+            // Update existing URL to enabled
+            savedPresets = savedPresets.map(item =>
+              item.url === baseUrl ? {
+                ...item,
+                enabled: true,
+                minOdds: minOddsInput.value,
+                maxOdds: maxOddsInput.value,
+                minNumDataPoints: minNumDataPointsInput.value
+              } : item
+            );
+          }
+        } else {
+          // Update existing URL to disabled
+          savedPresets = savedPresets.map(item =>
+            item.url === baseUrl ? {...item, enabled: false} : item
+          );
+        }
+        
+        // Save updated list
+        chrome.storage.local.set({
+          'savedPresets': savedPresets
+        }, function() {
+          // Update the displayed list
+          displaySavedPresets();
+        });
+      });
+    });
+  });
+  
+  // Handle save preset button
+  savePresetButton.addEventListener('click', function() {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const url = new URL(tabs[0].url);
+      const baseUrl = url.origin + url.pathname;
+      const urlTitle = tabs[0].title || baseUrl;
+      const presetName = presetNameInput.value.trim() || urlTitle.split(' - ')[0] || 'Preset';
+      
+      // Get existing saved presets
+      chrome.storage.local.get(['savedPresets'], function(result) {
+        let savedPresets = result.savedPresets || [];
+        
+        // Add or update preset
+        if (!savedPresets.some(item => item.url === baseUrl)) {
+          savedPresets.push({
+            url: baseUrl,
+            title: urlTitle,
+            enabled: true,
+            minOdds: minOddsInput.value,
+            maxOdds: maxOddsInput.value,
+            minNumDataPoints: minNumDataPointsInput.value,
+            name: presetName
+          });
+        } else {
+          // Update existing preset
+          savedPresets = savedPresets.map(item =>
+            item.url === baseUrl ? {
+              ...item,
+              enabled: true,
+              minOdds: minOddsInput.value,
+              maxOdds: maxOddsInput.value,
+              minNumDataPoints: minNumDataPointsInput.value,
+              name: presetName
+            } : item
+          );
+        }
+        
+        // Turn on the preset toggle
+        presetToggle.checked = true;
+        
+        // Save updated list
+        chrome.storage.local.set({
+          'savedPresets': savedPresets
+        }, function() {
+          // Clear preset name input
+          presetNameInput.value = '';
+          
+          // Update the displayed list
+          displaySavedPresets();
+        });
+      });
+    });
+  });
+  
+  // Function to display the list of saved presets
+  function displaySavedPresets() {
+    const presetListContainer = document.getElementById('savedPresetsList');
+    if (!presetListContainer) return;
+    
+    // Clear the container
+    presetListContainer.innerHTML = '';
+    
+    // Get the list of saved presets
+    chrome.storage.local.get(['savedPresets'], function(result) {
+      const savedPresets = result.savedPresets || [];
+      
+      if (savedPresets.length === 0) {
+        presetListContainer.innerHTML = '<p class="no-presets">No presets have been saved yet.</p>';
+        return;
+      }
+      
+      // Create a list element
+      const list = document.createElement('ul');
+      list.className = 'preset-list';
+      
+      // Add each preset to the list
+      savedPresets.forEach((item, index) => {
+        const listItem = document.createElement('li');
+        listItem.className = 'preset-item';
+        
+        // Create toggle switch container
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'preset-toggle';
+        
+        // Create toggle input
+        const toggleInput = document.createElement('input');
+        toggleInput.type = 'checkbox';
+        toggleInput.id = `preset-toggle-${index}`;
+        toggleInput.checked = item.enabled;
+        toggleInput.dataset.url = item.url;
+        toggleInput.addEventListener('change', function() {
+          togglePresetEnabled(item.url, this.checked);
+        });
+        
+        // Create toggle label
+        const toggleLabel = document.createElement('label');
+        toggleLabel.htmlFor = `preset-toggle-${index}`;
+        
+        // Add input and label to container
+        toggleContainer.appendChild(toggleInput);
+        toggleContainer.appendChild(toggleLabel);
+        
+        // Create preset text
+        const presetText = document.createElement('span');
+        presetText.className = 'preset-text';
+        presetText.textContent = item.name || item.title || item.url;
+        
+        // Create preset info
+        const presetInfo = document.createElement('span');
+        presetInfo.className = 'preset-info';
+        presetInfo.textContent = `Min: ${item.minOdds}, Max: ${item.maxOdds}, DataPts: ${item.minNumDataPoints}`;
+        
+        // Create delete button
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'delete-preset';
+        deleteButton.textContent = '×';
+        deleteButton.dataset.url = item.url;
+        deleteButton.addEventListener('click', function() {
+          deletePreset(item.url);
+        });
+        
+        // Add elements to list item
+        listItem.appendChild(toggleContainer);
+        listItem.appendChild(presetText);
+        listItem.appendChild(presetInfo);
+        listItem.appendChild(deleteButton);
+        
+        // Add list item to list
+        list.appendChild(listItem);
+      });
+      
+      // Add list to container
+      presetListContainer.appendChild(list);
+    });
+  }
+  
+  // Function to toggle a preset's enabled state
+  function togglePresetEnabled(url, enabled) {
+    chrome.storage.local.get(['savedPresets'], function(result) {
+      let savedPresets = result.savedPresets || [];
+      
+      // Update the preset's enabled state
+      savedPresets = savedPresets.map(item =>
+        item.url === url ? {...item, enabled: enabled} : item
+      );
+      
+      // Save the updated list
+      chrome.storage.local.set({
+        'savedPresets': savedPresets
+      }, function() {
+        // Update the displayed list
+        displaySavedPresets();
+      });
+    });
+  }
+  
+  // Function to delete a preset from the list
+  function deletePreset(url) {
+    chrome.storage.local.get(['savedPresets'], function(result) {
+      let savedPresets = result.savedPresets || [];
+      
+      // Remove the preset from the list
+      savedPresets = savedPresets.filter(item => item.url !== url);
+      
+      // Save the updated list
+      chrome.storage.local.set({
+        'savedPresets': savedPresets
+      }, function() {
+        // Update the displayed list
+        displaySavedPresets();
       });
     });
   }
