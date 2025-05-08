@@ -463,3 +463,11 @@ button:hover {
   background-color: #f9f9f9;
   border-radius: 4px;
 }
+
+/* Preset items list - without scrollbar since parent already has one */
+.preset-items-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}

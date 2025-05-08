@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Create a list element
       const list = document.createElement('ul');
-      list.className = 'url-list';
+      list.className = 'preset-items-list';
       
       // Add each preset to the list
       savedPresets.forEach((item, index) => {
