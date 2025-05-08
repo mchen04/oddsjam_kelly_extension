@@ -1,85 +1,58 @@
-# Oddsjam Fantasy Bet Sizing Calculator - Chrome Extension
+# OddsJam Chrome Extension
 
-This Chrome extension uses the Kelly Criterion to calculate optimal bet sizes on OddsJam.com, helping users make more informed betting decisions based on Expected Value (EV), implied odds, and their bankroll.
+## Overview
 
-## Overview of Files
+The OddsJam Chrome Extension helps users find the best betting odds across various sportsbooks, streamlining the process of line shopping and maximizing potential profits. It seamlessly integrates into your browsing experience, providing real-time odds comparisons directly on sportsbook websites.
 
-### 1. `manifest.json`
-This is the extension's configuration file that defines:
-- Basic information (name, version, description)
-- Permissions required (tabs, storage, scripting)
-- Host permissions (oddsjam.com)
-- Content scripts, background service worker
-- Action popup and icons
+## Key Features
 
-### 2. `background.js`
-The background script powers the extension's core functionality:
-- Listens for tab updates to automatically detect when users navigate to oddsjam.com
-- Orchestrates the scraping process with a multi-step approach:
-  1. Checks if there's a suitable table on the page
-  2. Scrapes targeted elements containing odds and EV data
-  3. Processes the data using stored bankroll and Kelly multiplier settings
-  4. Injects a new column into the OddsJam table
-  5. Updates the bet size values based on the Kelly calculations
-- Includes helper functions for odds conversion and Kelly Criterion calculations
-- Listens for messages from the popup to run on demand or update settings
+*   **Odds Comparison:** Displays odds from multiple sportsbooks side-by-side, making it easy to identify the best available lines.
+*   **Real-time Updates:** Odds are updated in real-time, ensuring you always have the latest information.
+*   **Seamless Integration:** Works directly on popular sportsbook websites without requiring you to switch between tabs or windows.
+*   **Customizable Settings:** Allows you to configure your preferred sportsbooks and betting types.
 
-### 3. `content.js`
-A simpler content script that:
-- Listens for messages from the popup
-- Contains functions for scraping bets and creating an overlay (appears to be partially deprecated as the main functionality has been moved to background.js)
+## Installation and Setup
 
-### 4. `popup.html`
-The user interface that appears when clicking the extension icon:
-- Provides input fields for configuring bankroll amount and Kelly multiplier
-- Includes a "Get Data" button to manually trigger the scraping process
-- Contains an empty results container for displaying data
+1.  Download the extension files from [link to be provided].
+2.  Open Chrome and navigate to `chrome://extensions`.
+3.  Enable "Developer mode" in the top right corner.
+4.  Click "Load unpacked" and select the directory containing the extension files.
+5.  The OddsJam Chrome Extension is now installed and ready to use.
 
-### 5. `popup.js`
-Script that powers the popup interface:
-- Auto-runs the scraper when the popup opens
-- Handles the "Get Data" button click event
-- Contains duplicated versions of the scraping and calculation functions 
-- Processes table data using the Kelly Criterion formula
-- Converts between American and decimal odds formats
-- Calculates implied odds from American odds
-- Displays results in the popup or injects them directly into the OddsJam page
+## Usage Guidelines
 
-## How It Works
+1.  Navigate to a supported sportsbook website (e.g., DraftKings, FanDuel).
+2.  The extension will automatically detect the available odds and display them in a table or overlay.
+3.  Use the extension settings to customize your preferred sportsbooks and betting types.
+4.  Click on the odds to be redirected to the sportsbook's website to place your bet.
 
-1. When a user navigates to OddsJam.com, the extension automatically detects the page load
-2. It waits 1.5 seconds for the page to fully render, then checks for a suitable betting table
-3. If found, it scrapes the EV and odds data from specific elements on the page
-4. The data is processed using the Kelly Criterion formula to calculate optimal bet sizes
-5. A new "Kelly Bet Size" column is injected into the OddsJam table
-6. The calculated bet sizes are displayed in the new column
-7. Users can adjust their bankroll and Kelly multiplier in the popup to customize calculations
+### Example
 
-## Kelly Criterion Implementation
+When browsing DraftKings, the OddsJam Chrome Extension will display a table showing the odds for the same game on FanDuel, BetMGM, and other sportsbooks, allowing you to quickly compare and find the best price.
 
-The extension uses the Kelly Criterion formula to determine optimal bet sizing:
-- `f* = (bp - q) / b`
+## Configuration Options
 
-Where:
-- `f*` = fraction of bankroll to bet
-- `b` = decimal odds - 1 (net return per unit wagered)
-- `p` = probability of winning
-- `q` = probability of losing (1 - p)
+The extension offers the following configuration options:
 
-The extension applies a configurable Kelly multiplier (default 0.35) to make the betting strategy more conservative, as recommended by many professional bettors.
+*   **Preferred Sportsbooks:** Select the sportsbooks you want to include in the odds comparison.
+*   **Betting Types:** Choose the betting types you are interested in (e.g., moneyline, spread, over/under).
+*   **Display Settings:** Customize the appearance of the odds table or overlay.
 
-## Installation
+To access the configuration options, right-click on the extension icon in the Chrome toolbar and select "Options".
 
-1. Clone or download this repository
-2. Open Chrome and navigate to `chrome://extensions/`
-3. Enable "Developer mode" at the top right
-4. Click "Load unpacked" and select the folder containing these files
-5. The extension should now be installed and will activate on oddsjam.com
+## Contributing
 
-## Usage
+We welcome contributions to the OddsJam Chrome Extension! To contribute:
 
-1. Navigate to any page on oddsjam.com containing a betting table
-2. The extension will automatically inject the Kelly bet sizes into a new column
-3. To adjust settings, click the extension icon in your browser toolbar
-4. Enter your desired bankroll amount and Kelly multiplier
-5. Click "Get Data" to refresh the calculations with your new settings
+1.  Fork the repository on GitHub.
+2.  Create a new branch for your feature or bug fix.
+3.  Submit a pull request with a clear description of your changes.
+
+## Licensing
+
+This project is licensed under the [License Name] License. See the `LICENSE` file for more information.
+
+## Dependencies
+
+*   Chrome browser
+*   [Any other dependencies, e.g., specific JavaScript libraries]
