@@ -32,8 +32,10 @@ document.addEventListener('DOMContentLoaded', function() {
       const urlTitle = tabs[0].title || baseUrl;
       
       // Get existing enabled URLs
-      chrome.storage.local.get(['enabledUrls'], function(result) {
+      chrome.storage.local.get(['enabledUrls', 'bankroll', 'kellyMultiplier'], function(result) {
         let enabledUrls = result.enabledUrls || [];
+        const currentBankroll = result.bankroll || bankrollInput.value;
+        const currentKellyMultiplier = result.kellyMultiplier || kellyMultiplierInput.value;
         
         if (enableToggle.checked) {
           // Add current URL if not already in the list
@@ -41,12 +43,19 @@ document.addEventListener('DOMContentLoaded', function() {
             enabledUrls.push({
               url: baseUrl,
               title: urlTitle,
-              enabled: true
+              enabled: true,
+              bankroll: currentBankroll,
+              kellyMultiplier: currentKellyMultiplier
             });
           } else {
             // Update existing URL to enabled
             enabledUrls = enabledUrls.map(item =>
-              item.url === baseUrl ? {...item, enabled: true} : item
+              item.url === baseUrl ? {
+                ...item,
+                enabled: true,
+                bankroll: currentBankroll,
+                kellyMultiplier: currentKellyMultiplier
+              } : item
             );
           }
         } else {
@@ -69,9 +78,41 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Function to save values to chrome.storage
   function saveValues() {
+    const newBankroll = bankrollInput.value;
+    const newKellyMultiplier = kellyMultiplierInput.value;
+    
     chrome.storage.local.set({
-      'bankroll': bankrollInput.value,
-      'kellyMultiplier': kellyMultiplierInput.value
+      'bankroll': newBankroll,
+      'kellyMultiplier': newKellyMultiplier
+    });
+    
+    // Also update these values for the current URL if it's enabled
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const url = new URL(tabs[0].url);
+      const baseUrl = url.origin + url.pathname;
+      
+      chrome.storage.local.get(['enabledUrls'], function(result) {
+        let enabledUrls = result.enabledUrls || [];
+        const currentUrlInfo = enabledUrls.find(item => item.url === baseUrl && item.enabled);
+        
+        if (currentUrlInfo) {
+          // Update the values for this URL
+          enabledUrls = enabledUrls.map(item =>
+            item.url === baseUrl ? {
+              ...item,
+              bankroll: newBankroll,
+              kellyMultiplier: newKellyMultiplier
+            } : item
+          );
+          
+          chrome.storage.local.set({
+            'enabledUrls': enabledUrls
+          }, function() {
+            // Update the displayed list
+            displayEnabledUrls();
+          });
+        }
+      });
     });
   }
   
@@ -233,10 +274,31 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleContainer.appendChild(toggleInput);
         toggleContainer.appendChild(toggleLabel);
         
+        // Create URL text container
+        const textContainer = document.createElement('div');
+        textContainer.className = 'url-text-container';
+        
         // Create URL text
         const urlText = document.createElement('span');
         urlText.className = 'url-text';
         urlText.textContent = item.title || item.url;
+        textContainer.appendChild(urlText);
+        
+        // Add values if enabled
+        if (item.enabled && (item.bankroll || item.kellyMultiplier)) {
+          const valuesContainer = document.createElement('div');
+          valuesContainer.className = 'url-values';
+          
+          const bankrollValue = item.bankroll || bankrollInput.value;
+          const kellyValue = item.kellyMultiplier || kellyMultiplierInput.value;
+          
+          valuesContainer.innerHTML = `
+            <span class="value-item">Bankroll: $${bankrollValue}</span>
+            <span class="value-item">Kelly %: ${kellyValue}</span>
+          `;
+          
+          textContainer.appendChild(valuesContainer);
+        }
         
         // Create delete button
         const deleteButton = document.createElement('button');
@@ -249,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add elements to list item
         listItem.appendChild(toggleContainer);
-        listItem.appendChild(urlText);
+        listItem.appendChild(textContainer);
         listItem.appendChild(deleteButton);
         
         // Add list item to list
@@ -450,10 +512,33 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleContainer.appendChild(toggleInput);
         toggleContainer.appendChild(toggleLabel);
         
+        // Create URL text container
+        const textContainer = document.createElement('div');
+        textContainer.className = 'url-text-container';
+        
         // Create URL text
         const urlText = document.createElement('span');
         urlText.className = 'url-text';
         urlText.textContent = item.title || item.url;
+        textContainer.appendChild(urlText);
+        
+        // Add values if enabled
+        if (item.enabled) {
+          const valuesContainer = document.createElement('div');
+          valuesContainer.className = 'url-values';
+          
+          const minOddsValue = item.minOdds || "-200";
+          const maxOddsValue = item.maxOdds || "200";
+          const minDataPointsValue = item.minNumDataPoints || "3";
+          
+          valuesContainer.innerHTML = `
+            <span class="value-item">Min Odds: ${minOddsValue}</span>
+            <span class="value-item">Max Odds: ${maxOddsValue}</span>
+            <span class="value-item">Min Data Points: ${minDataPointsValue}</span>
+          `;
+          
+          textContainer.appendChild(valuesContainer);
+        }
         
         // Create delete button
         const deleteButton = document.createElement('button');
@@ -466,7 +551,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add elements to list item
         listItem.appendChild(toggleContainer);
-        listItem.appendChild(urlText);
+        listItem.appendChild(textContainer);
         listItem.appendChild(deleteButton);
         
         // Add list item to list
@@ -553,20 +638,29 @@ document.addEventListener('DOMContentLoaded', function() {
         const urlTitle = tabs[0].title || baseUrl;
         
         // Get existing enabled URLs
-        chrome.storage.local.get(['enabledUrls'], function(result) {
+        chrome.storage.local.get(['enabledUrls', 'bankroll', 'kellyMultiplier'], function(result) {
           let enabledUrls = result.enabledUrls || [];
+          const currentBankroll = result.bankroll || bankrollInput.value;
+          const currentKellyMultiplier = result.kellyMultiplier || kellyMultiplierInput.value;
           
           // Add current URL if not already in the list
           if (!enabledUrls.some(item => item.url === baseUrl)) {
             enabledUrls.push({
               url: baseUrl,
               title: urlTitle,
-              enabled: true
+              enabled: true,
+              bankroll: currentBankroll,
+              kellyMultiplier: currentKellyMultiplier
             });
           } else {
             // Update existing URL to enabled
             enabledUrls = enabledUrls.map(item =>
-              item.url === baseUrl ? {...item, enabled: true} : item
+              item.url === baseUrl ? {
+                ...item,
+                enabled: true,
+                bankroll: currentBankroll,
+                kellyMultiplier: currentKellyMultiplier
+              } : item
             );
           }
           
