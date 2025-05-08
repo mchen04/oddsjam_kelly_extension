@@ -37,7 +37,7 @@ let checkInterval = setInterval(function() {
         console.log("Table found during interval check, checking if page is enabled...");
         checkIfPageEnabled();
     }
-}, 2000); // Check every 2 seconds
+}, 10000); // Check every 10 seconds
 
 // Clear the interval after 30 seconds to avoid unnecessary checks
 setTimeout(function() {
