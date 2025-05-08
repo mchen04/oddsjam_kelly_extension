@@ -523,10 +523,90 @@ document.addEventListener('DOMContentLoaded', function() {
         }, function() {
           // Update the displayed list
           displaySavedPresets();
+          
+          // Immediately apply the preset to the current tab
+          applyPresetToCurrentTab(presetData);
         });
       });
     });
   });
+  
+  // Function to apply preset to current tab
+  function applyPresetToCurrentTab(preset) {
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (!tabs || !tabs[0]) {
+        console.error("No active tab found");
+        return;
+      }
+      
+      try {
+        // Create a new URL object to manipulate
+        const currentUrl = new URL(tabs[0].url);
+        const newUrl = new URL(tabs[0].url);
+        let urlModified = false;
+        
+        // Handle minOdds parameter
+        if (preset.minOdds !== undefined && preset.minOdds !== '') {
+          // Only modify if the current value is different
+          if (currentUrl.searchParams.get('minOdds') !== preset.minOdds) {
+            newUrl.searchParams.set('minOdds', preset.minOdds);
+            urlModified = true;
+          }
+        } else {
+          // Remove parameter if it exists in URL but not in preset
+          if (currentUrl.searchParams.has('minOdds')) {
+            newUrl.searchParams.delete('minOdds');
+            urlModified = true;
+          }
+        }
+        
+        // Handle maxOdds parameter
+        if (preset.maxOdds !== undefined && preset.maxOdds !== '') {
+          // Only modify if the current value is different
+          if (currentUrl.searchParams.get('maxOdds') !== preset.maxOdds) {
+            newUrl.searchParams.set('maxOdds', preset.maxOdds);
+            urlModified = true;
+          }
+        } else {
+          // Remove parameter if it exists in URL but not in preset
+          if (currentUrl.searchParams.has('maxOdds')) {
+            newUrl.searchParams.delete('maxOdds');
+            urlModified = true;
+          }
+        }
+        
+        // Handle minNumDataPoints parameter
+        if (preset.minNumDataPoints !== undefined && preset.minNumDataPoints !== '') {
+          // Only modify if the current value is different
+          if (currentUrl.searchParams.get('minNumDataPoints') !== preset.minNumDataPoints) {
+            newUrl.searchParams.set('minNumDataPoints', preset.minNumDataPoints);
+            urlModified = true;
+          }
+        } else {
+          // Remove parameter if it exists in URL but not in preset
+          if (currentUrl.searchParams.has('minNumDataPoints')) {
+            newUrl.searchParams.delete('minNumDataPoints');
+            urlModified = true;
+          }
+        }
+        
+        // Only update the tab URL if we actually modified it
+        if (urlModified) {
+          // Check if the new URL is actually different from the current URL
+          if (newUrl.toString() !== tabs[0].url) {
+            console.log("URL parameters changed, updating URL to:", newUrl.toString());
+            chrome.tabs.update(tabs[0].id, {url: newUrl.toString()});
+          } else {
+            console.log("URL parameters rearranged but content is the same, skipping refresh");
+          }
+        } else {
+          console.log("No parameters changed, URL not modified");
+        }
+      } catch (err) {
+        console.error("Error applying preset to current tab:", err);
+      }
+    });
+  }
   
   // Function to display the list of saved presets
   function displaySavedPresets() {
