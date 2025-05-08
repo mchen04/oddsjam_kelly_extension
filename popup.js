@@ -377,22 +377,51 @@ document.addEventListener('DOMContentLoaded', function() {
             name: presetName
           };
           
-          // Only include parameters that have values
-          if (minOddsValue !== '') presetData.minOdds = minOddsValue;
-          if (maxOddsValue !== '') presetData.maxOdds = maxOddsValue;
-          if (minNumDataPointsValue !== '') presetData.minNumDataPoints = minNumDataPointsValue;
+          // Only include parameters that have actual values (not just whitespace)
+          // Note: "0" is considered a valid value
+          if (minOddsValue !== '' && minOddsValue.trim() !== '') presetData.minOdds = minOddsValue.trim();
+          if (maxOddsValue !== '' && maxOddsValue.trim() !== '') presetData.maxOdds = maxOddsValue.trim();
+          if (minNumDataPointsValue !== '' && minNumDataPointsValue.trim() !== '') presetData.minNumDataPoints = minNumDataPointsValue.trim();
           
           // Add current URL if not already in the list
           if (!savedPresets.some(item => item.url === baseUrl)) {
             savedPresets.push(presetData);
           } else {
             // Update existing URL to enabled and update settings
-            savedPresets = savedPresets.map(item =>
-              item.url === baseUrl ? {
-                ...item,
-                ...presetData
-              } : item
-            );
+            savedPresets = savedPresets.map(item => {
+              if (item.url === baseUrl) {
+                // Start with a clean preset object that only has the base properties
+                const updatedPreset = {
+                  ...item,
+                  enabled: true,
+                  name: presetName,
+                  title: urlTitle
+                };
+                
+                // Explicitly handle each parameter - add if present, remove if empty
+                if (minOddsValue !== '' && minOddsValue.trim() !== '') {
+                  updatedPreset.minOdds = minOddsValue.trim();
+                } else {
+                  // Explicitly delete the property if it exists and the new value is empty
+                  delete updatedPreset.minOdds;
+                }
+                
+                if (maxOddsValue !== '' && maxOddsValue.trim() !== '') {
+                  updatedPreset.maxOdds = maxOddsValue.trim();
+                } else {
+                  delete updatedPreset.maxOdds;
+                }
+                
+                if (minNumDataPointsValue !== '' && minNumDataPointsValue.trim() !== '') {
+                  updatedPreset.minNumDataPoints = minNumDataPointsValue.trim();
+                } else {
+                  delete updatedPreset.minNumDataPoints;
+                }
+                
+                return updatedPreset;
+              }
+              return item;
+            });
           }
         } else {
           // Update existing URL to disabled
@@ -437,10 +466,11 @@ document.addEventListener('DOMContentLoaded', function() {
           name: presetName
         };
         
-        // Only include parameters that have values
-        if (minOddsValue !== '') presetData.minOdds = minOddsValue;
-        if (maxOddsValue !== '') presetData.maxOdds = maxOddsValue;
-        if (minNumDataPointsValue !== '') presetData.minNumDataPoints = minNumDataPointsValue;
+        // Only include parameters that have actual values (not just whitespace)
+        // Note: "0" is considered a valid value
+        if (minOddsValue !== '' && minOddsValue.trim() !== '') presetData.minOdds = minOddsValue.trim();
+        if (maxOddsValue !== '' && maxOddsValue.trim() !== '') presetData.maxOdds = maxOddsValue.trim();
+        if (minNumDataPointsValue !== '' && minNumDataPointsValue.trim() !== '') presetData.minNumDataPoints = minNumDataPointsValue.trim();
         
         // Add or update preset
         if (!savedPresets.some(item => item.url === baseUrl)) {
@@ -448,12 +478,40 @@ document.addEventListener('DOMContentLoaded', function() {
           savedPresets.push(presetData);
         } else {
           // Update existing preset
-          savedPresets = savedPresets.map(item =>
-            item.url === baseUrl ? {
-              ...item,
-              ...presetData
-            } : item
-          );
+          savedPresets = savedPresets.map(item => {
+            if (item.url === baseUrl) {
+              // Start with a clean preset object that only has the base properties
+              const updatedPreset = {
+                ...item,
+                enabled: true,
+                name: presetName,
+                title: urlTitle
+              };
+              
+              // Explicitly handle each parameter - add if present, remove if empty
+              if (minOddsValue !== '' && minOddsValue.trim() !== '') {
+                updatedPreset.minOdds = minOddsValue.trim();
+              } else {
+                // Explicitly delete the property if it exists and the new value is empty
+                delete updatedPreset.minOdds;
+              }
+              
+              if (maxOddsValue !== '' && maxOddsValue.trim() !== '') {
+                updatedPreset.maxOdds = maxOddsValue.trim();
+              } else {
+                delete updatedPreset.maxOdds;
+              }
+              
+              if (minNumDataPointsValue !== '' && minNumDataPointsValue.trim() !== '') {
+                updatedPreset.minNumDataPoints = minNumDataPointsValue.trim();
+              } else {
+                delete updatedPreset.minNumDataPoints;
+              }
+              
+              return updatedPreset;
+            }
+            return item;
+          });
         }
         
         // Turn on the preset toggle
