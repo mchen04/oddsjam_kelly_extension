@@ -67,10 +67,10 @@ function checkIfPageEnabled() {
             
             if (currentUrlInfo && currentUrlInfo.enabled) {
                 console.log("Page is enabled, running calculations automatically");
-                // Get bankroll and kellyMultiplier from storage
-                const bankroll = result.bankroll || 4000;
-                const kellyMultiplier = result.kellyMultiplier || 1;
-                console.log("Using bankroll:", bankroll, "and Kelly multiplier:", kellyMultiplier);
+                // Get bankroll and kellyMultiplier from URL-specific settings if available, otherwise fall back to global settings
+                const bankroll = currentUrlInfo.bankroll || result.bankroll || 4000;
+                const kellyMultiplier = currentUrlInfo.kellyMultiplier || result.kellyMultiplier || 1;
+                console.log("Using URL-specific settings - Bankroll:", bankroll, "and Kelly multiplier:", kellyMultiplier);
                 
                 // Check if the table exists before running calculations
                 if (document.querySelector('table')) {

@@ -92,13 +92,13 @@ function checkIfPageEnabled(url, tabId) {
       // Check for Kelly Criterion processing (only if not already handling preset settings)
       if (currentUrlInfo && currentUrlInfo.enabled && !needsUrlModification) {
         console.log("Page is enabled for Kelly calculations, running scraper automatically");
-        runScraper(tabId);
+        runScraper(tabId, currentUrlInfo);
         
-        // Also notify the content script to run its calculations
+        // Also notify the content script to run its calculations with URL-specific settings
         chrome.tabs.sendMessage(tabId, {
           action: "pageEnabled",
-          bankroll: result.bankroll || 3000,
-          kellyMultiplier: result.kellyMultiplier || 1
+          bankroll: currentUrlInfo.bankroll || result.bankroll || 3000,
+          kellyMultiplier: currentUrlInfo.kellyMultiplier || result.kellyMultiplier || 1
         }, function(response) {
           console.log("Content script response:", response);
         });
@@ -112,7 +112,7 @@ function checkIfPageEnabled(url, tabId) {
 }
   
   // Main function to orchestrate the scraping process
-  function runScraper(tabId) {
+  function runScraper(tabId, urlInfo = null) {
     console.log("Running scraper on tab:", tabId);
     
     // First, check if there's a table that needs our processing
@@ -133,43 +133,60 @@ function checkIfPageEnabled(url, tabId) {
             console.log(`Scraped ${scraped.elements} elements`);
             
             // Step 2: Process the data with settings from storage
-            chrome.storage.local.get({
-              bankroll: 4000,
-              kellyMultiplier: 1
-            }, (settings) => {
+            if (urlInfo && urlInfo.bankroll && urlInfo.kellyMultiplier) {
+              // Use URL-specific settings if available
+              console.log(`Using URL-specific settings: Bankroll: ${urlInfo.bankroll}, Kelly %: ${urlInfo.kellyMultiplier}`);
               const tableData = processTableData(
                 scraped.text,
-                settings.bankroll,
-                settings.kellyMultiplier
+                urlInfo.bankroll,
+                urlInfo.kellyMultiplier
               );
-              
-              // Step 3: Inject the new column
-              chrome.scripting.executeScript({
-                target: {tabId: tabId},
-                function: injectBetSizeColumn
-              }, () => {
-                // Add a short delay before updating bet sizes to ensure values are properly calculated
-                setTimeout(() => {
-                  // Step 4: Update the bet sizes
-                  chrome.scripting.executeScript({
-                    target: {tabId: tabId},
-                    function: updateBetSizes,
-                    args: [tableData.map(row => row.betSize)]
-                  });
-                }, 250); // 0.25 second delay
+              processScrapedData(tabId, tableData);
+            } else {
+              // Fall back to global settings if URL-specific settings not available
+              chrome.storage.local.get({
+                bankroll: 4000,
+                kellyMultiplier: 1
+              }, (settings) => {
+                console.log(`Using global settings: Bankroll: ${settings.bankroll}, Kelly %: ${settings.kellyMultiplier}`);
+                const tableData = processTableData(
+                  scraped.text,
+                  settings.bankroll,
+                  settings.kellyMultiplier
+                );
+                processScrapedData(tabId, tableData);
               });
-            });
+            }
           } else {
             console.log("No elements scraped, trying again in 1 second");
             // Try again after a delay in case content is still loading
-            setTimeout(() => runScraper(tabId), 1000);
+            setTimeout(() => runScraper(tabId, urlInfo), 1000);
           }
         });
       } else {
         console.log("No suitable table found on this page, trying again in 1 second");
         // Try again after a delay in case table is loaded dynamically
-        setTimeout(() => runScraper(tabId), 1000);
+        setTimeout(() => runScraper(tabId, urlInfo), 1000);
       }
+    });
+  }
+  
+  // Helper function to process scraped data and update the UI
+  function processScrapedData(tabId, tableData) {
+    // Step 3: Inject the new column
+    chrome.scripting.executeScript({
+      target: {tabId: tabId},
+      function: injectBetSizeColumn
+    }, () => {
+      // Add a short delay before updating bet sizes to ensure values are properly calculated
+      setTimeout(() => {
+        // Step 4: Update the bet sizes
+        chrome.scripting.executeScript({
+          target: {tabId: tabId},
+          function: updateBetSizes,
+          args: [tableData.map(row => row.betSize)]
+        });
+      }, 250); // 0.25 second delay
     });
   }
   
@@ -352,14 +369,43 @@ function checkIfPageEnabled(url, tabId) {
         
         if (tabId) {
           console.log("Running scraper on tab:", tabId);
-          runScraper(tabId);
+          // Get the URL info for this tab
+          chrome.tabs.get(tabId, function(tab) {
+            if (chrome.runtime.lastError) {
+              console.error("Error getting tab:", chrome.runtime.lastError);
+              runScraper(tabId);
+              return;
+            }
+            
+            const url = new URL(tab.url);
+            const baseUrl = url.origin + url.pathname;
+            
+            // Get URL-specific settings
+            chrome.storage.local.get(['enabledUrls'], function(result) {
+              const enabledUrls = result.enabledUrls || [];
+              const urlInfo = enabledUrls.find(item => item.url === baseUrl && item.enabled);
+              
+              runScraper(tabId, urlInfo);
+            });
+          });
           sendResponse({status: "Scraper started on tab " + tabId});
         } else {
           // If no tab ID from sender, use the active tab
           chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             if (tabs && tabs[0]) {
               console.log("Running scraper on active tab:", tabs[0].id);
-              runScraper(tabs[0].id);
+              
+              const url = new URL(tabs[0].url);
+              const baseUrl = url.origin + url.pathname;
+              
+              // Get URL-specific settings
+              chrome.storage.local.get(['enabledUrls'], function(result) {
+                const enabledUrls = result.enabledUrls || [];
+                const urlInfo = enabledUrls.find(item => item.url === baseUrl && item.enabled);
+                
+                runScraper(tabs[0].id, urlInfo);
+              });
+              
               sendResponse({status: "Scraper started on active tab " + tabs[0].id});
             } else {
               console.error("No active tab found");

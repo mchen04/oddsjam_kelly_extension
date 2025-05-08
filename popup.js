@@ -200,23 +200,8 @@ document.addEventListener('DOMContentLoaded', function() {
               function: scrapeTargetedElements
             }, (results) => {
               if (results && results[0] && results[0].result) {
-                const tableData = processTableData(results[0].result.text);
-                
-                chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                  chrome.scripting.executeScript({
-                    target: {tabId: tabs[0].id},
-                    function: injectBetSizeColumn
-                  }, () => {
-                    // Add a short delay before updating bet sizes to ensure values are properly calculated
-                    setTimeout(() => {
-                      chrome.scripting.executeScript({
-                        target: {tabId: tabs[0].id},
-                        function: updateBetSizes,
-                        args: [tableData.map(row => row.betSize)]
-                      });
-                    }, 250); // 0.25 second delay
-                  });
-                });
+                // Process the data with URL-specific settings
+                processTableData(results[0].result.text);
               }
             });
           });
@@ -746,25 +731,8 @@ function displayResults(results) {
   }
 
   if (results && results[0] && results[0].result) {
-      const tableData = processTableData(results[0].result.text);
-      //displayTableFormat(tableData);
-      
-      // Inject column and update bet sizes
-      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-          chrome.scripting.executeScript({
-              target: {tabId: tabs[0].id},
-              function: injectBetSizeColumn
-          }, () => {
-              // Add a short delay before updating bet sizes to ensure values are properly calculated
-              setTimeout(() => {
-                  chrome.scripting.executeScript({
-                      target: {tabId: tabs[0].id},
-                      function: updateBetSizes,
-                      args: [tableData.map(row => row.betSize)]
-                  });
-              }, 250); // 0.25 second delay
-          });
-      });
+      // Process the data with URL-specific settings
+      processTableData(results[0].result.text);
   } else {
       resultsContainer.innerHTML = "No matching elements found or error occurred";
   }
@@ -840,43 +808,87 @@ function updateBetSizes(betSizes) {
 function processTableData(rawText) {
   const lines = rawText.trim().split('\n\n');
   const tableData = [];
-  const bankroll = parseFloat(document.getElementById('bankroll').value) || 4000;
-  const kellyMultiplier = parseFloat(document.getElementById('kellyMultiplier').value) || 0.25;
   
-  for (let i = 0; i < lines.length; i += 3) {
+  // Get the current URL to check for URL-specific settings
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    const url = new URL(tabs[0].url);
+    const baseUrl = url.origin + url.pathname;
+    
+    // Get URL-specific settings if available
+    chrome.storage.local.get(['enabledUrls', 'bankroll', 'kellyMultiplier'], function(result) {
+      const enabledUrls = result.enabledUrls || [];
+      const currentUrlInfo = enabledUrls.find(item => item.url === baseUrl && item.enabled);
+      
+      // Use URL-specific settings if available, otherwise fall back to global settings
+      const bankroll = currentUrlInfo?.bankroll || parseFloat(document.getElementById('bankroll').value) || 4000;
+      const kellyMultiplier = currentUrlInfo?.kellyMultiplier || parseFloat(document.getElementById('kellyMultiplier').value) || 0.25;
+      
+      console.log(`Using settings - Bankroll: ${bankroll}, Kelly %: ${kellyMultiplier}`);
+      
+      processTableDataWithSettings(rawText, bankroll, kellyMultiplier);
+    });
+  });
+  
+  // This function will be called once we have the correct settings
+  function processTableDataWithSettings(rawText, bankroll, kellyMultiplier) {
+    for (let i = 0; i < lines.length; i += 3) {
       if (i + 2 < lines.length) {
-          const trueAmericanOdds = lines[i + 1].replace(/^\d+\.\s/, '');
-          const bookAmericanOdds = lines[i + 2].replace(/^\d+\.\s/, '');
-          const bookDecimalOdds = americanToDecimal(bookAmericanOdds);
-          const actualProb = calculateImpliedOdds(trueAmericanOdds) / 100;
-          
-          // Kelly Criterion calculation with step-by-step logging
-          const b = bookDecimalOdds - 1;
-          const p = actualProb; 
-          const q = 1.0 - p;   
-          
-          console.log('Kelly Step by Step:');
-          console.log('1. b =', b);
-          console.log('2. p =', p);
-          console.log('3. 1.0 - p =', q);
-          console.log('4. b * p =', b * p);
-          console.log('5. (b * p) - q =', (b * p) - q);
-          console.log('6. ((b * p) - q) / b =', ((b * p) - q) / b);
-          
-          const kellyFraction = ((b * p) - q) / b;
-          const betSize = Math.max(0, kellyFraction * kellyMultiplier * bankroll).toFixed(2);
-          
-          const row = {
-              ev: lines[i].replace(/^\d+\.\s/, ''),
-              odds: trueAmericanOdds,
-              bookPrice: bookAmericanOdds,
-              impliedOdds: calculateImpliedOdds(trueAmericanOdds),
-              betSize: betSize
-          };
-          tableData.push(row);
+        const trueAmericanOdds = lines[i + 1].replace(/^\d+\.\s/, '');
+        const bookAmericanOdds = lines[i + 2].replace(/^\d+\.\s/, '');
+        const bookDecimalOdds = americanToDecimal(bookAmericanOdds);
+        const actualProb = calculateImpliedOdds(trueAmericanOdds) / 100;
+        
+        // Kelly Criterion calculation with step-by-step logging
+        const b = bookDecimalOdds - 1;
+        const p = actualProb;
+        const q = 1.0 - p;
+        
+        console.log('Kelly Step by Step:');
+        console.log('1. b =', b);
+        console.log('2. p =', p);
+        console.log('3. 1.0 - p =', q);
+        console.log('4. b * p =', b * p);
+        console.log('5. (b * p) - q =', (b * p) - q);
+        console.log('6. ((b * p) - q) / b =', ((b * p) - q) / b);
+        
+        const kellyFraction = ((b * p) - q) / b;
+        const betSize = Math.max(0, kellyFraction * kellyMultiplier * bankroll).toFixed(2);
+        
+        const row = {
+          ev: lines[i].replace(/^\d+\.\s/, ''),
+          odds: trueAmericanOdds,
+          bookPrice: bookAmericanOdds,
+          impliedOdds: calculateImpliedOdds(trueAmericanOdds),
+          betSize: betSize
+        };
+        tableData.push(row);
       }
+    }
+    
+    // Now that we have the data, update the UI
+    updateUIWithTableData(tableData);
   }
+  
   return tableData;
+}
+
+// Function to update the UI with the processed table data
+function updateUIWithTableData(tableData) {
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    chrome.scripting.executeScript({
+      target: {tabId: tabs[0].id},
+      function: injectBetSizeColumn
+    }, () => {
+      // Add a short delay before updating bet sizes to ensure values are properly calculated
+      setTimeout(() => {
+        chrome.scripting.executeScript({
+          target: {tabId: tabs[0].id},
+          function: updateBetSizes,
+          args: [tableData.map(row => row.betSize)]
+        });
+      }, 250); // 0.25 second delay
+    });
+  });
 }
 
 function americanToDecimal(americanOdds) {
@@ -953,38 +965,46 @@ function calculateKelly(ev, odds) {
 function processTable() {
   const table = document.querySelector('table');
   if (table) {
-      const rows = table.querySelectorAll('tbody tr');
-      const tableData = [];
+    const rows = table.querySelectorAll('tbody tr');
+    const tableData = [];
 
-      rows.forEach(row => {
+    // Get the current URL to check for URL-specific settings
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      const url = new URL(tabs[0].url);
+      const baseUrl = url.origin + url.pathname;
+      
+      // Get URL-specific settings if available
+      chrome.storage.local.get(['enabledUrls', 'bankroll', 'kellyMultiplier'], function(result) {
+        const enabledUrls = result.enabledUrls || [];
+        const currentUrlInfo = enabledUrls.find(item => item.url === baseUrl && item.enabled);
+        
+        // Use URL-specific settings if available, otherwise fall back to global settings
+        const bankroll = currentUrlInfo?.bankroll || parseFloat(document.getElementById('bankroll').value) || 4000;
+        const kellyMultiplier = currentUrlInfo?.kellyMultiplier || parseFloat(document.getElementById('kellyMultiplier').value) || 0.25;
+        
+        console.log(`Using settings for table processing - Bankroll: ${bankroll}, Kelly %: ${kellyMultiplier}`);
+        
+        rows.forEach(row => {
           const evCell = row.querySelector('td:nth-child(5)');
           const oddsCell = row.querySelector('td:nth-child(6)');
           
           if (evCell && oddsCell) {
-              const ev = parseFloat(evCell.textContent);
-              const odds = oddsCell.textContent.trim();
-              const betSize = calculateKelly(ev, odds);
-              tableData.push({ betSize });
+            const ev = parseFloat(evCell.textContent);
+            const odds = oddsCell.textContent.trim();
+            const kellyFraction = calculateKelly(ev, odds);
+            const betSize = (kellyFraction * kellyMultiplier * bankroll).toFixed(2);
+            tableData.push({ betSize });
           }
-      });
+        });
 
-      const resultsContainer = document.getElementById('results');
-      if (tableData.length > 0) {
-          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-              chrome.scripting.executeScript({
-                  target: {tabId: tabs[0].id},
-                  function: injectBetSizeColumn
-              }, () => {
-                  chrome.scripting.executeScript({
-                      target: {tabId: tabs[0].id},
-                      function: updateBetSizes,
-                      args: [tableData.map(row => row.betSize)]
-                  });
-              });
-          });
-      } else {
+        const resultsContainer = document.getElementById('results');
+        if (tableData.length > 0) {
+          updateUIWithTableData(tableData);
+        } else {
           resultsContainer.innerHTML = "No matching elements found or error occurred";
-      }
+        }
+      });
+    });
   }
 }
 });
