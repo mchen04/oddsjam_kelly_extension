@@ -1,9 +1,16 @@
 document.addEventListener('DOMContentLoaded', function() {
   const scrapeButton = document.getElementById('scrapeButton');
   const resultsContainer = document.getElementById('results');
-  const bankrollInput = document.getElementById('bankroll');
+  const bankrollInput = document.getElementById('bankroll'); // This is for the main Kelly Criterion column
+  const newKellyBankrollInput = document.getElementById('newKellyBankroll'); // This is for the new Kelly Calculator column
+  const newKellyMultiplierInput = document.getElementById('newKellyMultiplier'); // This is for the new Kelly Calculator column
   const kellyMultiplierInput = document.getElementById('kellyMultiplier');
   const enableToggle = document.getElementById('enableToggle');
+  const projectedOddsInput = document.getElementById('projectedOdds');
+  const offeredOddsInput = document.getElementById('offeredOdds');
+  const calculateKellyButton = document.getElementById('calculateKellyButton');
+  const optimalBetPercentageSpan = document.getElementById('optimalBetPercentage');
+  const recommendedWagerAmountSpan = document.getElementById('recommendedWagerAmount');
   
   // Preset Settings elements
   const presetToggle = document.getElementById('presetToggle');
@@ -16,9 +23,12 @@ document.addEventListener('DOMContentLoaded', function() {
   loadSavedValues();
   
   // Save values when they change
-  bankrollInput.addEventListener('change', saveValues);
   kellyMultiplierInput.addEventListener('change', saveValues);
+  calculateKellyButton.addEventListener('click', calculateAndDisplayKelly);
   
+  // Add event listener for newKellyBankrollInput to save its value
+  newKellyBankrollInput.addEventListener('input', saveNewKellyBankroll);
+
   // Add event listeners for preset settings
   minOddsInput.addEventListener('change', savePresetValues);
   maxOddsInput.addEventListener('change', savePresetValues);
@@ -116,6 +126,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  // Function to save newKellyBankroll to chrome.storage
+  function saveNewKellyBankroll() {
+    chrome.storage.local.set({
+      'newKellyBankroll': newKellyBankrollInput.value
+    });
+  }
+
   // Function to save preset values to chrome.storage
   function savePresetValues() {
     chrome.storage.local.set({
@@ -134,13 +151,24 @@ document.addEventListener('DOMContentLoaded', function() {
       'minOdds',
       'maxOdds',
       'minNumDataPoints',
-      'savedPresets'
+      'savedPresets',
+      'newKellyBankroll' // Add newKellyBankroll to the list of items to retrieve
     ], function(result) {
       if (result.bankroll) {
         bankrollInput.value = result.bankroll;
+      } else {
+        bankrollInput.value = 5000; // New default
+      }
+      // Load newKellyBankroll from storage, or set default to 5000
+      if (result.newKellyBankroll) {
+        newKellyBankrollInput.value = result.newKellyBankroll;
+      } else {
+        newKellyBankrollInput.value = 5000; // Default for new Kelly Bankroll
       }
       if (result.kellyMultiplier) {
         kellyMultiplierInput.value = result.kellyMultiplier;
+      } else {
+        kellyMultiplierInput.value = 1; // New default
       }
       // Set default values for preset settings inputs if not already set
       // We don't use result.minOdds etc. here because we want to use the default values from the HTML
@@ -992,8 +1020,8 @@ function processTableData(rawText) {
       const currentUrlInfo = enabledUrls.find(item => item.url === baseUrl && item.enabled);
       
       // Use URL-specific settings if available, otherwise fall back to global settings
-      const bankroll = currentUrlInfo?.bankroll || parseFloat(document.getElementById('bankroll').value) || 4000;
-      const kellyMultiplier = currentUrlInfo?.kellyMultiplier || parseFloat(document.getElementById('kellyMultiplier').value) || 0.25;
+      const bankroll = currentUrlInfo?.bankroll || parseFloat(document.getElementById('bankroll').value) || 5000;
+      const kellyMultiplier = currentUrlInfo?.kellyMultiplier || parseFloat(document.getElementById('kellyMultiplier').value) || 1;
       
       console.log(`Using settings - Bankroll: ${bankroll}, Kelly %: ${kellyMultiplier}`);
       
@@ -1044,6 +1072,45 @@ function processTableData(rawText) {
   return tableData;
 }
 
+function calculateAndDisplayKelly() {
+  const projectedOdds = projectedOddsInput.value.trim();
+  const offeredOdds = offeredOddsInput.value.trim();
+
+  if (!projectedOdds || !offeredOdds) {
+    optimalBetPercentageSpan.textContent = 'Please enter both odds.';
+    recommendedWagerAmountSpan.textContent = 'N/A';
+    return;
+  }
+
+  const bankroll = parseFloat(newKellyBankrollInput.value) || 5000;
+  const kellyMultiplier = parseFloat(newKellyMultiplierInput.value) || 1.0;
+
+  // Convert American odds to decimal odds
+  const bookDecimalOdds = americanToDecimal(offeredOdds);
+  const actualProb = calculateImpliedOdds(projectedOdds) / 100; // Projected odds are true odds
+
+  if (isNaN(bookDecimalOdds) || isNaN(actualProb) || actualProb <= 0) {
+    optimalBetPercentageSpan.textContent = 'Invalid odds entered.';
+    recommendedWagerAmountSpan.textContent = 'N/A';
+    return;
+  }
+
+  const b = bookDecimalOdds - 1;
+  const p = actualProb;
+  const q = 1.0 - p;
+
+  let kellyFraction = 0;
+  if (b > 0) { // Avoid division by zero
+    kellyFraction = ((b * p) - q) / b;
+  }
+
+  const optimalBetPercent = Math.max(0, kellyFraction * kellyMultiplier);
+  const recommendedWager = (optimalBetPercent * bankroll).toFixed(2);
+
+  optimalBetPercentageSpan.textContent = `${(optimalBetPercent * 100).toFixed(2)}%`;
+  recommendedWagerAmountSpan.textContent = `$${recommendedWager}`;
+}
+
 // Function to update the UI with the processed table data
 function updateUIWithTableData(tableData) {
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -1080,9 +1147,9 @@ function calculateImpliedOdds(americanOdds) {
   if (isNaN(odds)) return 0;
   
   if (odds > 0) {
-    return (100 / (odds + 100) * 100).toFixed(2);
+    return parseFloat((100 / (odds + 100) * 100).toFixed(2));
   } else {
-    return (Math.abs(odds) / (Math.abs(odds) + 100) * 100).toFixed(2);
+    return parseFloat((Math.abs(odds) / (Math.abs(odds) + 100) * 100).toFixed(2));
   }
 }
 

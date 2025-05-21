@@ -12,6 +12,42 @@
     </header>
     
     <div class="columns-container">
+      <!-- New Column: Kelly Criterion Calculator -->
+      <div class="column new-kelly-calculator-column" id="newKellyCalculatorColumn">
+        <div class="column-header">
+          <h3>Kelly Calculator</h3>
+        </div>
+        <div class="settings-panel">
+          <div class="input-row">
+            <div class="input-group">
+              <label for="projectedOdds">Projected Odds</label>
+              <input type="text" id="projectedOdds" placeholder="-110, +150, 100">
+            </div>
+            <div class="input-group">
+              <label for="offeredOdds">Offered Odds</label>
+              <input type="text" id="offeredOdds" placeholder="-110, +150, 100">
+            </div>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="newKellyBankroll">Bankroll ($)</label>
+              <input type="number" id="newKellyBankroll" value="4000" min="0">
+            </div>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="newKellyMultiplier">Kelly %</label>
+              <input type="number" id="newKellyMultiplier" value="1.0" min="0" max="1" step="0.01">
+            </div>
+          </div>
+          <button id="calculateKellyButton">Calculate Kelly</button>
+          <div id="kellyResults" class="kelly-results">
+            <p>Optimal Bet: <span id="optimalBetPercentage">N/A</span></p>
+            <p>Wager Amount: <span id="recommendedWagerAmount">N/A</span></p>
+          </div>
+        </div>
+      </div>
+
       <!-- Left Column: Kelly Criterion -->
       <div class="column kelly-column">
         <div class="column-header">
@@ -33,6 +69,7 @@
               <input type="number" id="kellyMultiplier" value="1" min="0" max="1" step="0.01">
             </div>
           </div>
+          
           
           <button id="scrapeButton">Calculate Bets</button>
         </div>
